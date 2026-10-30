@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Consulta Universidatos UAEMEX</title>
+<meta name="description" content="Busca y grafica los indicadores históricos 2004–2025 de la Agenda Estadística de la UAEMEX.">
+__HEAD__
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Agenda Estadística UAEMEX · Series 2004–2025</span>
+    <h1>Consulta Universidatos</h1>
+    <p class="sub">Escribe lo que buscas con palabras sencillas, por ejemplo «matrícula licenciatura 2020» o «PTC en el SNII desde 2015». Verás la cifra, su evolución y el archivo de origen.</p>
+  </header>
+
+  <section class="ask" aria-label="Buscar un dato">
+    <form class="ask-row" id="form-buscar">
+      <label for="pregunta" class="cuenta" hidden>¿Qué dato buscas?</label>
+      <input id="pregunta" type="search" autocomplete="off" placeholder="¿Qué dato buscas?" style="flex:1 1 280px;min-width:0;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--bg)">
+      <button class="btn" type="submit">Buscar</button>
+    </form>
+    <div class="chips" id="ejemplos"></div>
+    <div class="ia" id="ia-box" hidden>
+      <label for="ia-activa"><input type="checkbox" id="ia-activa" checked> Redactar la respuesta con IA local</label>
+      <span class="cuenta" id="ia-modelo"></span>
+    </div>
+  </section>
+
+  <section class="resultado" id="resultado" aria-live="polite">
+    <div class="respuesta" id="respuesta"></div>
+    <div class="panel" id="panel-res">
+      <div class="panel-head"><h2 id="res-titulo"></h2><span class="cuenta" id="res-eje"></span></div>
+      <div class="grafica" id="res-grafica"></div>
+      <div class="tabla-wrap" id="res-tabla"></div>
+      <p class="fuente" id="res-fuente"></p>
+    </div>
+    <div class="alternativas" id="alternativas" hidden>
+      <span class="cuenta">También puede interesarte</span>
+      <div class="chips" id="alt-chips"></div>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:12px" aria-label="Tablas anuales" id="sec-tablas">
+    <h2>Tablas anuales</h2>
+    <p class="sub" style="font-size:15px" id="t-intro">Detalle por espacio universitario, programa, categoría y sexo. Toca el nombre de una columna para graficarla y elige qué filas comparar.</p>
+    <div class="t-filtros">
+      <label class="cuenta" for="t-sel">Tabla</label><select id="t-sel"></select>
+      <label class="cuenta" for="t-anio">Año</label><select id="t-anio"></select>
+      <label class="cuenta" for="t-grupo" id="t-grupo-lbl">Comparar</label><select id="t-grupo"></select>
+      <label class="cuenta" for="t-filtro">Filtrar</label><input id="t-filtro" type="search" placeholder="Ingeniería, Medicina, Licenciatura en…" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);width:100%;min-width:0">
+    </div>
+    <div class="panel"><div class="tabla-wrap" id="t-vista"></div><p class="fuente" id="t-fuente"></p></div>
+    <div id="t-graf"></div>
+  </section>
+
+  <section style="display:grid;gap:12px" aria-label="Explorar indicadores">
+    <h2>Explorar todos los indicadores</h2>
+    <div class="explorer">
+      <div class="lista">
+        <div class="filtros">
+          <label class="cuenta" for="f-eje">Eje</label>
+          <select id="f-eje"><option value="">Todos los ejes</option></select>
+          <label class="cuenta" for="f-texto">Filtrar</label>
+          <input id="f-texto" type="search" placeholder="matrícula, SNII, becas, titulación…">
+        </div>
+        <span class="cuenta" id="cuenta"></span>
+        <div id="items"></div>
+      </div>
+      <div class="panel" id="panel-exp">
+        <div class="panel-head"><h2 id="exp-titulo"></h2><span class="cuenta" id="exp-eje"></span></div>
+        <div class="grafica" id="exp-grafica"></div>
+        <div class="tabla-wrap" id="exp-tabla"></div>
+        <p class="fuente" id="exp-fuente"></p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Fuente: Secretaría de Desarrollo y Fortalecimiento Institucional, UAEMEX. Agenda Estadística 2025, sección Series 2004–2025 (archivos His01 a His08). Consulta los originales en <a href="https://sdfi.uaemex.mx/estadisticas/universidatos/agendas-estad%C3%ADsticas.html" style="color:var(--verde)">sdfi.uaemex.mx</a>.</span>
+    <span>Un guion (—) indica que el indicador no se reportó ese año. Sitio no oficial elaborado con datos públicos.</span>
+  </footer>
+</div>
+
+<script>__BUSCADOR__</script>
+<script id="datos" type="application/json">__DATA__</script>
+<script id="tablas" type="application/json">__TABLAS__</script>
+<script>
+(function(){
+const D = JSON.parse(document.getElementById('datos').textContent);
+const IND = D.indicadores, SER = D.series;
+const byId = Object.fromEntries(IND.map(i=>[i.id,i]));
+const ANIOS = Array.from({length:22},(_,k)=>2004+k);
+const $ = id=>document.getElementById(id);
+const COLORES = ['--s1','--s2','--s3','--s4'];
+const css = v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const buscador = Buscador.crear(IND, SER);
+
+/* ---------- Tablas anuales (detalle por espacio universitario) ---------- */
+const TAB = JSON.parse(document.getElementById('tablas').textContent);
+function asegurarCelda(id){
+  id=String(id||'');
+  if(SER[id]) return true;
+  const m=/^([A-Z]\d{2})\.f(\d+)\.c(\d+)$/.exec(id); if(!m) return false;
+  const T=TAB[m[1]], f=+m[2], c=+m[3];
+  if(!T || T.tipo==='lista' || !T.filas[f] || !T.columnas[c]) return false;
+  const vals={}; Object.entries(T.datos).forEach(([a,mat])=>{ const v=mat[f]&&mat[f][c]; if(v!=null) vals[a]=v; });
+  if(!Object.keys(vals).length) return false;
+  const ref=Object.keys(T.excel).sort().pop(), ex=T.excel[ref];
+  SER[id]=vals;
+  byId[id]={id, ruta:[T.titulo,...T.filas[f].ruta,T.columnas[c].join(' › ')].join(' > '), concepto:T.columnas[c].join(' › '),
+    eje:`${T.seccion} · tabla anual`, archivo:T.archivo, fila_excel:ex.filas[f]!=null?`${ex.filas[f]}${ex.columnas[c]?' col '+ex.columnas[c]:''}`:'', celda:{t:T.id,f,c}};
+  return true;
+}
+const VACIAS_T=new Set('tiene tienen tuvo tuvieron hay hubo fueron existen de la el en los las del y por para con que como cuantos cuantas cual total numero porcentaje porcentajes proporcion universidad uaemex tabla tablas dato datos anio ano dame muestra muestrame grafica graficas grafico graficos graficar grafiques barras barra pastel linea lineas haz hazme quiero necesito relacion relaciones comparacion comparativo compara comparar'.split(' '));
+const SIN_T={sni:'sistema nacional',snii:'sistema nacional',becas:'beca',deportivas:'deport',deportivos:'deport',deportiva:'deport',deportivo:'deport',deportes:'deport',deporte:'deport',becados:'beca',becadas:'beca',becado:'beca',becada:'beca',profesores:'profesora',profesor:'profesora',docentes:'profesora',docente:'profesora',maestros:'profesora',ptc:'tiempo completo',
+  facultades:'facultad',planteles:'plantel',prepas:'plantel',preparatorias:'plantel',dependencias:'dependencia',centros:'centro',hombres:'hombres',mujeres:'mujeres',
+  genero:'hombres',sexo:'hombres',estimulos:'proed',capacitacion:'capacit',capacitados:'capacit',cursos:'curso',incorporadas:'incorporad',particulares:'incorporad'};
+const EQUIV_T={licenci:['estudios profesionales'],posgrad:['estudios avanzados'],prepa:['bachillerato'],prepara:['bachillerato'],alumno:['matricu','alumnado'],alumnos:['matricu','alumnado'],estudia:['matricu','alumnado'],aspiran:['solicit'],aspirant:['solicit']};
+const NIVEL_T=[[/licenci|profesional/,'estudios profesionales'],[/posgrad|maestr|doctor|especialidad|avanzad/,'estudios avanzados'],[/prepa|bachill|plantel/,'bachillerato']];
+const SUBCONJ_T=['excelencia','deport','emprend','afiliad','empleo','desocupad','ocupacion','continuan','verano','delfin','discapa','lenguas indigenas','incorpor','riesgo','municip','campo de formacion','lineamiento'];
+const PIDE_FICHA=/ficha|resumen|panorama|datos generales|informacion general|fundacion|fundad|se fundo|perfil del|todo sobre|semblanza/;
+const PIDE_LISTA=/lista|cuales|que programas|nombres?|acredit|vigente|oferta|planes? de estudio|organismo|snp|cifrhs|intrainstitucional|interinstitucional|creacion|reestructuracion/;
+function palabrasTabla(texto){
+  const ws=[];
+  Buscador.norm(texto).replace(/\b(por |cada |en cada )?espacios?( (academicos?|universitarios?))?\b/g,' ').split(' ').forEach(w=>{ if(w.length<3||VACIAS_T.has(w)||/^\d+$/.test(w)) return;  // «por espacio académico» no es tema
+    w=SIN_T[w]||w; if(!w.includes(' ')&&w.length>7) w=w.slice(0,7); if(!ws.includes(w)) ws.push(w); });
+  Object.entries(EQUIV_T).forEach(([k,vs])=>{ if(ws.includes(k)) vs.forEach(v=>{ if(!ws.includes(v)) ws.push(v); }); });
+  return ws;
+}
+let DF_T=null;
+function rankTablas(texto){
+  const ws=palabrasTabla(texto);
+  if(!ws.length) return [];
+  const todas=Object.values(TAB);
+  todas.forEach(T=>{ if(!T._n){
+    if(T.tipo==='lista'){ const a=Object.keys(T.renglones).sort().pop();
+      T._n={tit:Buscador.norm(T.titulo+' '+T.seccion), cols:(T.encabezados[a]||[]).map(Buscador.norm), fils:(T.renglones[a]||[]).map(r=>Buscador.norm(r.join(' ')))}; }
+    else { // solo renglones y columnas con dato en el año más reciente (los de años anteriores quedan vacíos)
+      const ult=T.datos[Object.keys(T.datos).sort().pop()]||{}, vivas=Object.keys(ult).map(Number), colsV=new Set(), pref=new Set();
+      Object.values(ult).forEach(r=>Object.keys(r).forEach(j=>colsV.add(+j)));
+      vivas.forEach(k=>{ const r=T.filas[k].ruta; for(let n=1;n<=r.length;n++) pref.add(JSON.stringify(r.slice(0,n))); });
+      T._n={tit:Buscador.norm(T.titulo+' '+T.seccion), cols:T.columnas.map((c,j)=>(!colsV.size||colsV.has(j))?Buscador.norm(c.join(' ')):''),
+            fils:T.filas.map(f=>(!vivas.length||pref.has(JSON.stringify(f.ruta)))?Buscador.norm(f.ruta.join(' ')):'')}; }
+  }});
+  const pidLista=PIDE_LISTA.test(Buscador.norm(texto));
+  const ULT_T=todas.map(T=>Object.keys(T.tipo==='lista'?T.renglones:T.datos).sort().pop()||'').sort().pop();
+  const peso={}; ws.forEach(w=>{ const df=todas.filter(T=>T._n.tit.includes(w)).length; peso[w]=1+Math.log(todas.length/(1+df)); });
+  return todas.map(T=>{
+    const {tit,cols,fils}=T._n;
+    let pts=0; const fc=new Set(), cc=new Set();
+    const renglon=ws.length>=2 && T.tipo!=='lista' && fils.some(f=>ws.every(w=>f.includes(w)));  // un renglón trae todo lo que se pregunta: pesa como columna
+    ws.forEach(w=>{
+      let enC=false; cols.forEach((c,j)=>{ if(c.includes(w)){ enC=true; cc.add(j);} });
+      let enF=false; fils.forEach((f,i)=>{ if(f.includes(w)){ enF=true; fc.add(i);} });
+      pts+=Math.max(tit.includes(w)?3*peso[w]:0, (enC||renglon)?2*Math.min(peso[w],5.5):0, enF?1:0); });  // cada palabra cuenta una vez, donde pese más
+    if(pts>0 && ws.some(w=>tit.startsWith(w))) pts+=2;
+    if(pts>0){ const extra=Buscador.norm(T.titulo).split(' ').filter(t=>t.length>=4&&!VACIAS_T.has(t)&&!/^\d+$/.test(t)&&!ws.some(w=>w.includes(t.slice(0,7))||t.includes(w))).length; pts-=0.01*extra; }  // desempate: título más general  // el título empieza con lo que se pregunta
+    const qn=Buscador.norm(texto);
+    SUBCONJ_T.forEach(s=>{ if(tit.includes(s) && !qn.includes(s)) pts-=8; });  // tablas de un subconjunto que no se pidió
+    const pide=NIVEL_T.filter(n=>n[0].test(qn));                  // nivel educativo de la pregunta
+    if(pide.length && !pide.some(n=>tit.includes(n[1])) && NIVEL_T.some(n=>tit.includes(n[1]))) pts-=4;
+    else if(!pide.length && tit.includes('estudios avanzados')) pts-=0.5;  // sin nivel: primero licenciatura o bachillerato
+    if(T.seccion==='Fichas por espacio' && !PIDE_FICHA.test(qn)) pts-=6;  // fichas por espacio: solo arriba si se pide la ficha
+    if(T.tipo==='lista' && !pidLista && !ws.every(w=>tit.includes(w))) pts-=3;            // listas de texto: solo arriba si se pide una lista
+    const aniosT=Object.keys(T.tipo==='lista'?T.renglones:T.datos);
+    if(!aniosT.includes(ULT_T) && !aniosT.some(a=>qn.includes(a))) pts-=3;  // tablas que ya no se publican: abajo, salvo que se pida su año
+    return {id:T.id, pts:Math.round(pts*1000)/1000, filas:[...fc], columnas:[...cc]};
+  }).filter(x=>x.pts>0).sort((a,b)=>b.pts-a.pts);
+}
+
+
+const esTasa = i => /%|porcentaje|índice|indice|eficiencia|tasa|por alumn|por computadora|por tutor/i.test(i.ruta);
+function fmt(v, i){
+  if(v==null) return '—';
+  const dec = (i && esTasa(i)) || !Number.isInteger(v) ? 1 : 0;
+  return v.toLocaleString('es-MX',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+function unidad(i){ return esTasa(i) && !/por alumn|por computadora|por tutor/i.test(i.ruta) ? '%' : ''; }
+
+/* ---------- Gráfica SVG ---------- */
+const ultimas={};
+function grafica(cont, id, desde=2004, hasta=2025){
+  ultimas[cont.id]=[cont,id,desde,hasta];
+  cont.innerHTML='';
+  const anios = ANIOS.filter(a=>a>=desde && a<=hasta);
+  const d = anios.map(a=>{const s=SER[id];return s&&s[a]!=null?s[a]:null;});
+  const vals = d.filter(v=>v!=null);
+  if(!vals.length){ cont.innerHTML='<p class="vacio">No hay datos de este indicador en esos años.</p>'; return; }
+  const W=Math.max(320,Math.min(760,cont.clientWidth||760)), H=W<500?240:290, ml=56,mr=14,mt=26,mb=34;
+  let max=Math.max(...vals), min=Math.min(0,...vals);
+  if(max===min) max=min+1;
+  const paso = nice((max-min)/4); max = Math.ceil(max/paso)*paso; min = Math.floor(min/paso)*paso;
+  const x = k => ml + (anios.length===1?0.5:k/(anios.length-1))*(W-ml-mr);
+  const y = v => mt + (1-(v-min)/(max-min))*(H-mt-mb);
+  const ns='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(ns,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('role','img');
+  svg.setAttribute('aria-label', byId[id].ruta);
+  const el=(t,a)=>{const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);svg.appendChild(e);return e;};
+  for(let v=min; v<=max+1e-9; v+=paso){
+    el('line',{x1:ml,x2:W-mr,y1:y(v),y2:y(v),stroke:css('--line'),'stroke-width':1});
+    el('text',{x:ml-8,y:y(v)+4,'text-anchor':'end','font-size':12,fill:css('--muted'),'font-family':css('--f-data')}).textContent=compacto(v);
+  }
+  const cada = Math.max(1, Math.ceil(anios.length/(W<500?5:9)));
+  anios.forEach((a,k)=>{ if(k===anios.length-1||(k%cada===0&&anios.length-1-k>=cada))
+    el('text',{x:x(k),y:H-10,'text-anchor':'middle','font-size':12,fill:css('--muted'),'font-family':css('--f-data')}).textContent=a; });
+  const color=css('--s1');
+  let area='', ini=null, ult=null;
+  d.forEach((v,k)=>{ if(v==null)return; if(ini==null){ini=k;area=`M${x(k)},${y(Math.max(min,0))} L${x(k)},${y(v)}`;} else area+=` L${x(k)},${y(v)}`; ult=k;});
+  if(ini!=null){ area+=` L${x(ult)},${y(Math.max(min,0))} Z`; el('path',{d:area,fill:color,'fill-opacity':.10,stroke:'none'}); }
+  let path='', abierto=false;
+  d.forEach((v,k)=>{ if(v==null){abierto=false;return;} path+=(abierto?' L':' M')+x(k)+','+y(v); abierto=true; });
+  el('path',{d:path,fill:'none',stroke:color,'stroke-width':2.5,'stroke-linejoin':'round','stroke-linecap':'round'});
+  d.forEach((v,k)=>{ if(v==null)return;
+    const c=el('circle',{cx:x(k),cy:y(v),r:k===ult?4.5:2.5,fill:color});
+    const tt=document.createElementNS(ns,'title'); tt.textContent=`${anios[k]}: ${fmt(v,byId[id])}`; c.appendChild(tt); });
+  el('text',{x:Math.max(ml+40,x(ult))-6,y:y(d[ult])-10,'text-anchor':'end','font-size':13,'font-weight':600,fill:color,'font-family':css('--f-data')}).textContent=fmt(d[ult],byId[id]);
+  cont.appendChild(svg);
+}
+let tRes=null; window.addEventListener('resize',()=>{clearTimeout(tRes); tRes=setTimeout(()=>Object.values(ultimas).forEach(a=>grafica(...a)),150);});
+function nice(r){const e=Math.pow(10,Math.floor(Math.log10(r)));const f=r/e;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*e;}
+function compacto(v){const a=Math.abs(v); if(a>=1e6) return (v/1e6).toLocaleString('es-MX',{maximumFractionDigits:1})+' M'; if(a>=1e4) return (v/1e3).toLocaleString('es-MX',{maximumFractionDigits:0})+' mil'; return v.toLocaleString('es-MX',{maximumFractionDigits:1});}
+
+function tabla(cont, id, desde=2004, hasta=2025){
+  const anios = ANIOS.filter(a=>a>=desde && a<=hasta); const i=byId[id];
+  const t=document.createElement('table');
+  const hr=t.createTHead().insertRow(); const h0=document.createElement('th'); h0.textContent='Indicador'; hr.appendChild(h0);
+  anios.forEach(a=>{const th=document.createElement('th');th.textContent=a;hr.appendChild(th);});
+  const r=t.createTBody().insertRow(); const c=r.insertCell(); c.textContent=i.concepto; c.title=i.ruta;
+  anios.forEach(a=>{r.insertCell().textContent=fmt(SER[id]?.[a],i);});
+  cont.innerHTML=''; cont.appendChild(t);
+}
+function mostrar(prefijo, id, desde=2004, hasta=2025){
+  const i=byId[id];
+  $(prefijo+'-titulo').textContent = i.ruta.split(' > ').join(' › ');
+  $(prefijo+'-eje').textContent = i.eje;
+  grafica($(prefijo+'-grafica'), id, desde, hasta);
+  tabla($(prefijo+'-tabla'), id, desde, hasta);
+  $(prefijo+'-fuente').textContent = `Origen: ${i.archivo}.xlsx, fila ${i.fila_excel} · Agenda Estadística 2025, Series 2004–2025`;
+}
+
+/* ---------- Respuesta directa ---------- */
+function anioCercano(id, a){ const s=SER[id]||{}; if(s[a]!=null) return a; return null; }
+function extremos(id, desde, hasta){ const s=SER[id]||{}; const as=Object.keys(s).map(Number).filter(a=>a>=desde&&a<=hasta).sort((a,b)=>a-b); return as.length?[as[0],as[as.length-1]]:null; }
+function p(txt, cls){ const e=document.createElement('p'); if(cls) e.className=cls; e.textContent=txt; return e; }
+function responder(id, q){
+  if(typeof quitarGraficasIA==='function') quitarGraficasIA(); $('panel-res').hidden=false;
+  const i=byId[id], u=unidad(i), box=$('respuesta'); box.innerHTML='';
+  const nombre=i.ruta.split(' > ').join(' › ');
+  let desde=2004, hasta=2025;
+  if(q.unico){
+    const a=anioCercano(id,q.unico);
+    if(a){ box.append(p(`${nombre}, ${a}`,'estado'));
+      const c=document.createElement('span'); c.className='cifra'; c.textContent=fmt(SER[id][a],i)+u; box.append(c);
+      const prev=SER[id][a-1]; if(prev!=null){ const dif=SER[id][a]-prev; box.append(p(`Frente a ${a-1}: ${dif>=0?'+':''}${fmt(dif,i)}${u}${!u&&prev?` (${dif>=0?'+':''}${(dif/prev*100).toFixed(1)}%)`:''}.`,'nota')); }
+    } else box.append(p(`No hay dato de ${nombre} para ${q.unico}. La gráfica muestra los años disponibles.`,'nota'));
+  } else {
+    if(q.desde){ desde=Math.max(2004,q.desde); hasta=Math.min(2025,q.hasta); }
+    const ex=extremos(id,desde,hasta);
+    if(ex){ const [a1,a2]=ex, v1=SER[id][a1], v2=SER[id][a2];
+      box.append(p(`${nombre}, ${a2}`,'estado'));
+      const c=document.createElement('span'); c.className='cifra'; c.textContent=fmt(v2,i)+u; box.append(c);
+      if(a1!==a2){ const dif=v2-v1;
+        box.append(p(`De ${a1} a ${a2} pasó de ${fmt(v1,i)}${u} a ${fmt(v2,i)}${u}: ${dif>=0?'+':''}${fmt(dif,i)}${u==='%'?' puntos':''}${!u&&v1?` (${dif>=0?'+':''}${(dif/v1*100).toFixed(1)}%)`:''}.`,'nota')); }
+    } else box.append(p(`No hay datos de ${nombre} entre ${desde} y ${hasta}.`,'nota'));
+  }
+  mostrar('res', id, desde, hasta);
+}
+
+let ultima=null;
+function buscar(texto){
+  const t=texto.trim(); if(!t) return;
+  if(typeof quitarGraficasIA==='function') quitarGraficasIA();
+  const {q, resultados}=buscador.buscar(t, 7);
+  ultima={t,q,resultados};
+  $('alternativas').hidden=true; $('alt-chips').innerHTML='';
+  if(!resultados.length){
+    const hayTabla=rankTablas(t).some(x=>x.pts>=3);
+    $('respuesta').innerHTML=''; $('respuesta').append(p(hayTabla ? `No hay una serie histórica para «${t}», pero sí tablas anuales relacionadas (abajo).`
+      : `No encontré indicadores para «${t}». Prueba con otras palabras (matrícula, egreso, PTC, becas, recursos) o explora la lista de abajo.`,'nota'));
+    $('panel-res').hidden=true; return;
+  }
+  $('panel-res').hidden=false;
+  const top=resultados[0];
+  responder(top.id, q);
+  if(top.faltan.length){
+    const pal=top.faltan.map(g=>g[0]).join(', ');
+    $('respuesta').prepend(p(`Las series no incluyen un indicador sobre «${pal}». Te muestro el más cercano; puede que ese dato esté en las tablas anuales de la Agenda.`,'nota'));
+  }
+  const alt=resultados.slice(1).filter(r=>r.pts>=resultados[0].pts-4);
+  if(alt.length){ $('alternativas').hidden=false;
+    alt.forEach(r=>{const b=document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=byId[r.id].ruta.split(' > ').slice(-2).join(' › ')+(byId[r.id].archivo==='His08'?' (incorporadas)':'');
+      b.title=byId[r.id].ruta; b.onclick=()=>{responder(r.id,q); window.scrollTo({top:$('resultado').offsetTop-12,behavior:'smooth'});}; $('alt-chips').appendChild(b);}); }
+}
+const buscarBase=buscar;
+buscar=function(texto){ buscarBase(texto); chipsTablas(texto); };
+function chipsTablas(texto){
+  const r=rankTablas(texto).filter(x=>x.pts>=3).slice(0,3); if(!r.length) return;
+  $('alternativas').hidden=false;
+  r.forEach(x=>{const b=document.createElement('button'); b.type='button'; b.className='chip chip-tabla'; b.textContent=`Ver tabla ${x.id}: ${TAB[x.id].titulo}`; b.onclick=()=>abrirTabla(x.id); $('alt-chips').appendChild(b);});
+}
+$('form-buscar').addEventListener('submit',e=>{e.preventDefault(); consultar($('pregunta').value);});
+['matrícula licenciatura 2020','PTC en el SNII desde 2015','eficiencia terminal licenciatura','movilidad internacional','subsidio federal últimos 5 años','titulados'].forEach(t=>{
+  const b=document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=t; b.onclick=()=>{$('pregunta').value=t; consultar(t);}; $('ejemplos').appendChild(b);});
+
+/* ---------- IA local (solo cuando la página la sirve servidor.py) ---------- */
+let iaLista=false, iaCtl=null;
+function consultar(t){
+  buscar(t);
+  // también se pregunta a la IA si no hay serie pero sí una tabla anual relacionada (p. ej. patentes)
+  if(iaLista && $('ia-activa').checked && ultima && (ultima.resultados.length || rankTablas(t).some(x=>x.pts>=3) || t.trim().split(/\s+/).length>=3)) preguntarIA(ultima);  // una pregunta completa siempre llega a la IA
+}
+/* ---------- Gráficas pedidas por la IA (siempre con los datos reales de la página) ---------- */
+function recorta(s,n){ return s.length>n ? s.slice(0,Math.max(8,n-1))+'…' : s; }
+function nombreCorto(id, grupo){
+  const i=byId[id];
+  if(!i.celda) return i.ruta.split(' > ').slice(-2).join(' › ');
+  const T=TAB[i.celda.t], fila=T.filas[i.celda.f].ruta, col=T.columnas[i.celda.c].join(' › ');
+  const g=(Array.isArray(grupo)?grupo:[]).filter(x=>byId[x]&&byId[x].celda&&byId[x].celda.t===i.celda.t);
+  if(g.length>1 && g.length===grupo.length){
+    if(g.every(x=>byId[x].celda.c===i.celda.c)){
+      const ultimo=fila[fila.length-1];
+      const repetido=g.some(x=>x!==id && T.filas[byId[x].celda.f].ruta.slice(-1)[0]===ultimo);
+      // si las filas vienen de espacios distintos (p. ej. programas de varias sedes), se nombra siempre el espacio
+      const padres=new Set(g.map(x=>{const r=T.filas[byId[x].celda.f].ruta; return r.length>1?r[r.length-2]:'';}));
+      return (repetido||padres.size>1)&&fila.length>2 ? `${ultimo} (${fila[fila.length-2]})`
+           : repetido&&fila.length>1 ? `${ultimo} (${fila[fila.length-2]})` : ultimo;
+    }
+    if(g.every(x=>byId[x].celda.f===i.celda.f)) return col;
+  }
+  return `${fila[fila.length-1]} · ${col}`;
+}
+function dibujarIA(cont,g){
+  cont.innerHTML='';
+  const ns='http://www.w3.org/2000/svg';
+  const W=Math.max(300,Math.min(900,cont.clientWidth||760));
+  const svg=document.createElementNS(ns,'svg');
+  const el=(tag,a)=>{const e=document.createElementNS(ns,tag);for(const k in a)e.setAttribute(k,a[k]);svg.appendChild(e);return e;};
+  const fData=css('--f-data'), fBody=css('--f-body'), cMuted=css('--muted'), cLine=css('--line'), cFg=css('--fg');
+  const ref=byId[g.ids[0]], u=unidad(ref);
+  let H;
+  if(g.tipo==='cambio_anios'){  // barra gris = año inicial, barra de color = año final; a la derecha, la diferencia
+    const filas=g.ids.map(id=>({id,a:SER[id]?.[g.desde],b:SER[id]?.[g.hasta]})).filter(f=>f.a!=null&&f.b!=null);
+    const max=Math.max(1,...filas.map(f=>Math.max(f.a,f.b))), compacto=filas.length>12, alto=compacto?40:52, mr=150;
+    H=34+filas.length*alto;
+    const cSube=css('--s1'), cBaja=css('--s4');
+    el('rect',{x:0,y:4,width:12,height:10,rx:2,fill:cMuted,'fill-opacity':.45});
+    el('text',{x:18,y:13,'font-size':12,fill:cMuted,'font-family':fBody}).textContent=String(g.desde);
+    el('rect',{x:70,y:4,width:12,height:10,rx:2,fill:cSube});
+    el('text',{x:88,y:13,'font-size':12,fill:cMuted,'font-family':fBody}).textContent=String(g.hasta);
+    filas.forEach((f,k)=>{
+      const y=30+k*alto, d=f.b-f.a, col=d>=0?cSube:cBaja;
+      const tx=el('text',{x:0,y:y+(compacto?11:14),'font-size':compacto?12:13,fill:cFg,'font-family':fBody});
+      tx.textContent=recorta(nombreCorto(f.id,g.ids),Math.floor(W/7.2));
+      const tt=document.createElementNS(ns,'title'); tt.textContent=`${byId[f.id].ruta}: ${g.desde} ${fmt(f.a,byId[f.id])}, ${g.hasta} ${fmt(f.b,byId[f.id])}`; tx.appendChild(tt);
+      const bh=compacto?8:10, y0=y+(compacto?16:20);
+      el('rect',{x:0,y:y0,width:Math.max(2,(W-mr)*f.a/max),height:bh,rx:2,fill:cMuted,'fill-opacity':.45});
+      el('rect',{x:0,y:y0+bh+2,width:Math.max(2,(W-mr)*f.b/max),height:bh,rx:2,fill:col});
+      el('text',{x:W-mr+8,y:y0+bh+1,'font-size':compacto?12:13,'font-weight':600,fill:col,'font-family':fData}).textContent=
+        `${d>=0?'+':'−'}${fmt(Math.abs(d),byId[f.id])}${u}`;
+      el('text',{x:W-mr+8,y:y0+2*bh+3,'font-size':11,fill:cMuted,'font-family':fData}).textContent=`${fmt(f.a,byId[f.id])} → ${fmt(f.b,byId[f.id])}`;
+    });
+  } else if(g.tipo==='comparar_anio'){
+    const filas=g.ids.map(id=>({id,v:SER[id]?.[g.anio]})).filter(f=>f.v!=null);
+    const max=Math.max(0,...filas.map(f=>f.v))||1, compacto=filas.length>12, alto=compacto?36:48, mr=90;
+    H=8+filas.length*alto;
+    filas.forEach((f,k)=>{
+      const y=8+k*alto;
+      const tx=el('text',{x:0,y:y+(compacto?11:14),'font-size':compacto?12:13,fill:cFg,'font-family':fBody});
+      tx.textContent=recorta(nombreCorto(f.id,g.ids),Math.floor(W/7.2));
+      const tt=document.createElementNS(ns,'title'); tt.textContent=byId[f.id].ruta; tx.appendChild(tt);
+      const w=Math.max(2,(W-mr)*f.v/max);
+      el('rect',{x:0,y:y+(compacto?16:21),width:w,height:compacto?13:17,rx:3,fill:css('--s1')});
+      el('text',{x:w+8,y:y+(compacto?27:34),'font-size':compacto?12:13,'font-weight':600,fill:cFg,'font-family':fData}).textContent=fmt(f.v,byId[f.id])+u;
+    });
+  } else {
+    const anios=ANIOS.filter(a=>a>=g.desde&&a<=g.hasta);
+    const datos=g.ids.map(id=>anios.map(a=>SER[id]?.[a]??null));
+    const vals=datos.flat().filter(v=>v!=null);
+    H=W<500?250:300; const ml=58,mr=16,mt=26,mb=34;
+    let max=Math.max(...vals), min=g.tipo==='barras'?0:Math.min(0,...vals); if(max===min) max=min+1;
+    const paso=nice((max-min)/4); max=Math.ceil(max/paso)*paso; min=Math.floor(min/paso)*paso;
+    const y=v=>mt+(1-(v-min)/(max-min))*(H-mt-mb);
+    const banda=(W-ml-mr)/anios.length;
+    const x=k=>g.tipo==='barras' ? ml+banda*(k+.5) : ml+(anios.length===1?.5:k/(anios.length-1))*(W-ml-mr);
+    for(let v=min; v<=max+1e-9; v+=paso){
+      el('line',{x1:ml,x2:W-mr,y1:y(v),y2:y(v),stroke:cLine,'stroke-width':1});
+      el('text',{x:ml-8,y:y(v)+4,'text-anchor':'end','font-size':12,fill:cMuted,'font-family':fData}).textContent=compacto(v);
+    }
+    const cada=Math.max(1,Math.ceil(anios.length/(W<500?5:9)));
+    const ultA=anios.length-1;
+    anios.forEach((a,k)=>{ if(k===ultA||(k%cada===0&&ultA-k>=cada)) el('text',{x:x(k),y:H-10,'text-anchor':'middle','font-size':12,fill:cMuted,'font-family':fData}).textContent=a; });
+    datos.forEach((d,s)=>{
+      const color=css(COLORES[s%COLORES.length]);
+      const ult=d.reduce((m,v,k)=>v!=null?k:m,-1);
+      if(g.tipo==='barras'){
+        const gw=banda*.74, bw=gw/datos.length;
+        d.forEach((v,k)=>{ if(v==null) return;
+          const r=el('rect',{x:ml+banda*k+(banda-gw)/2+s*bw,y:y(Math.max(v,0)),width:Math.max(1,bw-1),height:Math.abs(y(v)-y(0)),rx:2,fill:color});
+          const tt=document.createElementNS(ns,'title'); tt.textContent=`${nombreCorto(g.ids[s])}, ${anios[k]}: ${fmt(v,byId[g.ids[s]])}${u}`; r.appendChild(tt); });
+      } else {
+        if(datos.length===1){ let area='',ini=null,fin=null;
+          d.forEach((v,k)=>{ if(v==null)return; area+=(ini==null?`M${x(k)},${y(Math.max(min,0))} L`:' L')+`${x(k)},${y(v)}`; if(ini==null) ini=k; fin=k; });
+          if(ini!=null) el('path',{d:area+` L${x(fin)},${y(Math.max(min,0))} Z`,fill:color,'fill-opacity':.10,stroke:'none'}); }
+        let path='',abierto=false;
+        d.forEach((v,k)=>{ if(v==null){abierto=false;return;} path+=(abierto?' L':' M')+x(k)+','+y(v); abierto=true; });
+        el('path',{d:path,fill:'none',stroke:color,'stroke-width':2.5,'stroke-linejoin':'round','stroke-linecap':'round'});
+        d.forEach((v,k)=>{ if(v==null)return; const c=el('circle',{cx:x(k),cy:y(v),r:k===ult?4.5:2.5,fill:color});
+          const tt=document.createElementNS(ns,'title'); tt.textContent=`${nombreCorto(g.ids[s])}, ${anios[k]}: ${fmt(v,byId[g.ids[s]])}${u}`; c.appendChild(tt); });
+      }
+      if(ult>=0 && datos.length<=2)
+        el('text',{x:Math.max(ml+40,x(ult)+(g.tipo==='barras'?banda/2:0))-4,y:y(d[ult])-(datos.length===2&&s===1?22:9),'text-anchor':'end','font-size':13,'font-weight':600,fill:color,'font-family':fData}).textContent=fmt(d[ult],byId[g.ids[s]])+u;
+    });
+  }
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.setAttribute('role','img'); svg.setAttribute('aria-label',g.titulo);
+  cont.appendChild(svg);
+}
+function tablaIA(cont,g){
+  const t=document.createElement('table'), hr=t.createTHead().insertRow(), tb=t.createTBody();
+  const th=s=>{const e=document.createElement('th'); e.textContent=s; hr.appendChild(e);};
+  if(g.tipo==='cambio_anios'){ th('Indicador'); th(String(g.desde)); th(String(g.hasta)); th('Cambio');
+    g.ids.forEach(id=>{const r=tb.insertRow(); const c=r.insertCell(); c.textContent=nombreCorto(id,g.ids); c.title=byId[id].ruta;
+      const a=SER[id]?.[g.desde], b=SER[id]?.[g.hasta]; r.insertCell().textContent=fmt(a,byId[id]); r.insertCell().textContent=fmt(b,byId[id]);
+      r.insertCell().textContent=(a!=null&&b!=null)?`${b-a>=0?'+':'−'}${fmt(Math.abs(b-a),byId[id])}`:'';});
+  } else if(g.tipo==='comparar_anio'){ th('Indicador'); th(String(g.anio));
+    g.ids.forEach(id=>{const r=tb.insertRow(); const c=r.insertCell(); c.textContent=nombreCorto(id,g.ids); c.title=byId[id].ruta; r.insertCell().textContent=fmt(SER[id]?.[g.anio],byId[id]);});
+  } else { const anios=ANIOS.filter(a=>a>=g.desde&&a<=g.hasta); th('Indicador'); anios.forEach(a=>th(String(a)));
+    g.ids.forEach(id=>{const r=tb.insertRow(); const c=r.insertCell(); c.textContent=nombreCorto(id,g.ids); c.title=byId[id].ruta; anios.forEach(a=>{r.insertCell().textContent=fmt(SER[id]?.[a],byId[id]);});});
+  }
+  cont.innerHTML=''; cont.appendChild(t);
+}
+function descargar(nombre,blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nombre; document.body.append(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1000); }
+function archivo(g){ return (g.titulo||'grafica').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w]+/g,'-').replace(/^-|-$/g,'').toLowerCase()||'grafica'; }
+function csvIA(g){
+  const q=s=>typeof s==='number'?String(s):`"${String(s).replace(/"/g,'""')}"`; let filas;
+  if(g.tipo==='cambio_anios') filas=[['Indicador',g.desde,g.hasta,'Cambio'],...g.ids.map(id=>{const a=SER[id]?.[g.desde], b=SER[id]?.[g.hasta]; return [byId[id].ruta,a??'',b??'',(a!=null&&b!=null)?b-a:''];})];
+  else if(g.tipo==='comparar_anio') filas=[['Indicador',g.anio],...g.ids.map(id=>[byId[id].ruta,SER[id]?.[g.anio]??''])];
+  else { const anios=ANIOS.filter(a=>a>=g.desde&&a<=g.hasta); filas=[['Indicador',...anios],...g.ids.map(id=>[byId[id].ruta,...anios.map(a=>SER[id]?.[a]??'')])]; }
+  descargar(archivo(g)+'.csv',new Blob(['﻿'+filas.map(f=>f.map(q).join(',')).join('\r\n')],{type:'text/csv'}));
+}
+function pngIA(pn,g){
+  const svg=pn.querySelector('svg'); if(!svg) return;
+  const W=+svg.getAttribute('width'), Hg=+svg.getAttribute('height'), m=20, esc=2;
+  const nombres=g.tipo!=='comparar_anio'&&g.tipo!=='cambio_anios'&&g.ids.length>1?g.ids.map(id=>nombreCorto(id,g.ids)):[];
+  const cab=nombres.length?34+nombres.length*18:40, pie=30;
+  const img=new Image();
+  img.onload=()=>{
+    const TW=W+2*m, TH=Hg+cab+pie+m;
+    const cv=document.createElement('canvas'); cv.width=TW*esc; cv.height=TH*esc;
+    const c=cv.getContext('2d'); c.scale(esc,esc);
+    c.fillStyle=css('--surface'); c.fillRect(0,0,TW,TH);
+    c.fillStyle=css('--fg'); c.font=`600 17px ${css('--f-display')}`; c.fillText(g.titulo,m,m+12);
+    nombres.forEach((nm,s)=>{ const y=m+34+s*18;
+      c.fillStyle=css(COLORES[s%COLORES.length]); c.fillRect(m,y-6,16,3);
+      c.fillStyle=css('--fg'); c.font=`13px ${css('--f-body')}`; c.fillText(nm,m+24,y); });
+    c.drawImage(img,m,m+cab-14,W,Hg);
+    c.fillStyle=css('--muted'); c.font=`11px ${css('--f-body')}`; c.fillText('Fuente: Agenda Estadística UAEMEX 2025, Series 2004–2025 (SDFI).',m,m+cab-14+Hg+20);
+    cv.toBlob(b=>b&&descargar(archivo(g)+'.png',b),'image/png');
+  };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(new XMLSerializer().serializeToString(svg));
+}
+function panelIA(g){
+  const pn=document.createElement('div'); pn.className='panel panel-ia';
+  const head=document.createElement('div'); head.className='panel-head';
+  const h=document.createElement('h2'); h.textContent=g.titulo; head.append(h);
+  const acc=document.createElement('div'); acc.className='acciones';
+  [['Descargar PNG',()=>pngIA(pn,g)],['Descargar CSV',()=>csvIA(g)]].forEach(([t,f])=>{const b=document.createElement('button'); b.type='button'; b.className='btn-mini'; b.textContent=t; b.onclick=f; acc.append(b);});
+  head.append(acc);
+  const ley=document.createElement('div'); ley.className='leyenda';
+  if(g.tipo!=='comparar_anio' && g.tipo!=='cambio_anios' && g.ids.length>1) g.ids.forEach((id,s)=>{const sp=document.createElement('span'); const i=document.createElement('i'); i.style.background=css(COLORES[s%COLORES.length]); sp.append(i,nombreCorto(id,g.ids)); sp.title=byId[id].ruta; ley.append(sp);});
+  const graf=document.createElement('div'); graf.className='grafica';
+  const tab=document.createElement('div'); tab.className='tabla-wrap';
+  const porArch={}, formulas=[];
+  const agrega=id=>{ if(!byId[id]) asegurarCelda(id); const i=byId[id]; if(!i) return; if(i.derivada){ formulas.push(`${i.ruta} = ${i.derivada.formula}`); i.derivada.ids.forEach(agrega); return; }
+    const l=(porArch[i.archivo]=porArch[i.archivo]||[]); if(!i.celda && !l.includes(i.fila_excel)) l.push(i.fila_excel); };
+  g.ids.forEach(agrega);
+  const fte=p('Gráfica elegida por la IA y dibujada con los datos oficiales'+(formulas.length?(formulas.length>2?` · ${formulas.length} series calculadas, por ejemplo: ${formulas[0]}`:' · Serie calculada: '+formulas.join('; ')):'')+' · Origen: '+Object.entries(porArch).map(([a,f])=>`${a}.xlsx${f.length?`, fila${f.length>1?'s':''} ${f.join(', ')}`:''}`).join(' · '),'fuente');
+  pn.append(head,ley,graf,tab,fte);
+  pn._render=()=>{ dibujarIA(graf,g); tablaIA(tab,g); };
+  return pn;
+}
+let tIA=null; window.addEventListener('resize',()=>{clearTimeout(tIA); tIA=setTimeout(()=>document.querySelectorAll('.panel-ia,.panel-tabla').forEach(x=>x._render&&x._render()),150);});
+/* Tabla pedida por la IA: los valores salen siempre de los datos (ids de celdas o series calculadas), nunca del texto de la IA */
+function panelTablaIA(t){
+  const pn=document.createElement('div'); pn.className='panel panel-ia';
+  const head=document.createElement('div'); head.className='panel-head';
+  const h=document.createElement('h2'); h.textContent=t.titulo; head.append(h);
+  const ult=id=>{ const s=SER[id]; if(!s) return null; const ks=Object.keys(s).map(Number).sort((a,b)=>a-b); const a=t.anio&&s[t.anio]!=null?t.anio:ks[ks.length-1]; return s[a]; };
+  const fmtv=v=>v==null?'—':Number(v).toLocaleString('es-MX',{maximumFractionDigits:2});
+  const filas=(t.filas||[]).map(f=>[f.nombre,...(f.textos?f.textos:(f.ids||[]).map(id=>(id&&typeof id==='object')?String(id.texto??''):(id?ult(id):null)))]);
+  const esTexto=(t.filas||[]).some(f=>f.textos);
+  const tot=t.totales?['Total',...t.totales.map(id=>id?ult(id):'')]:null;
+  const acc=document.createElement('div'); acc.className='acciones';
+  const b=document.createElement('button'); b.type='button'; b.className='btn-mini'; b.textContent='Descargar CSV';
+  b.onclick=()=>{ const q=x=>/[",\n]/.test(String(x))?`"${String(x).replace(/"/g,'""')}"`:String(x??'');
+    const csv=[t.encabezados,...filas,...(tot?[tot]:[])].map(r=>r.map(q).join(',')).join('\n');
+    descargar((t.titulo||'tabla').replace(/[^\wáéíóúñ ]+/gi,'').trim().slice(0,60)+'.csv', new Blob(['\ufeff'+csv],{type:'text/csv'})); };
+  acc.append(b); head.append(acc); pn.append(head);
+  const box=document.createElement('div'); box.style.overflowX='auto';
+  const tb=document.createElement('table'); tb.className='tabla-ia';
+  const thead=document.createElement('tr'); t.encabezados.forEach((x,k)=>{const th=document.createElement('th'); th.textContent=x; const txtCol=esTexto||(filas[0]&&typeof filas[0][k]==='string'); if(k&&!txtCol) th.style.textAlign='right'; else if(txtCol) th.style.textAlign='left'; thead.append(th);}); tb.append(thead);
+  [...filas,...(tot?[tot]:[])].forEach((r,ri)=>{ const tr=document.createElement('tr'); if(tot&&ri===filas.length) tr.style.fontWeight='600';
+    r.forEach((x,k)=>{const td=document.createElement('td'); const txt=esTexto||typeof x==='string'; td.textContent=(k&&!txt)?fmtv(x):(x??''); if(k&&!txt){td.style.textAlign='right'; td.style.fontVariantNumeric='tabular-nums';} else if(txt){td.style.textAlign='left'; td.style.fontFamily='var(--f-body)'; td.style.fontSize='14px'; td.style.whiteSpace='normal';} tr.append(td);}); tb.append(tr); });
+  box.append(tb); pn.append(box);
+  if(t.fuente){ const f=document.createElement('p'); f.className='fuente'; f.textContent=t.fuente; pn.append(f); }
+  return pn;
+}
+function quitarGraficasIA(){ document.querySelectorAll('.panel-ia').forEach(e=>e.remove()); }
+
+async function preguntarIA(b){
+  if(iaCtl) iaCtl.abort();
+  const ctl=iaCtl=new AbortController();
+  const candidatos=buscador.buscar(b.t,10).resultados.map(r=>r.id);
+  const espera=p('La IA local está trabajando… Si necesita hacer cálculos puede tardar hasta un par de minutos; mientras tanto ya ves el dato del buscador.','estado');
+  espera.id='ia-espera'; $('respuesta').prepend(espera);
+  try{
+    const r=await fetch('api/preguntar',{method:'POST',headers:{'Content-Type':'application/json'},signal:ctl.signal,
+      body:JSON.stringify({pregunta:b.t,candidatos,desde:b.q.desde,hasta:b.q.hasta,anio:b.q.unico})});
+    const j=await r.json().catch(()=>({}));
+    if(ctl!==iaCtl) return;
+    if(!r.ok) throw new Error(j.error||'El servidor no respondió.');
+    Object.entries(j.series_calculadas||{}).forEach(([id,s])=>{ if(!s||!s.valores) return; SER[id]=s.valores;
+      byId[id]={id,ruta:s.nombre,concepto:s.nombre,eje:'Serie calculada',archivo:'calc',fila_excel:'',derivada:{op:s.op,ids:s.ids,formula:s.formula}}; });
+    Object.values(j.series_calculadas||{}).forEach(s=>(s.ids||[]).forEach(asegurarCelda));
+    (j.graficas||[]).forEach(g=>(g.ids||[]).forEach(asegurarCelda)); if(j.id) asegurarCelda(j.id);
+    (j.tablas||[]).forEach(t=>(t.filas||[]).forEach(f=>(f.ids||[]).forEach(id=>typeof id==='string'&&asegurarCelda(id))));
+    const hayGraficas=(Array.isArray(j.graficas)&&j.graficas.length>0)||(Array.isArray(j.tablas)&&j.tablas.length>0);
+    if(hayGraficas){ quitarGraficasIA(); $('respuesta').innerHTML=''; $('alternativas').hidden=true; }
+    else if(j.id && byId[j.id] && SER[j.id]) responder(j.id,b.q);
+    const blq=document.createElement('div'); blq.className='ia-resp';
+    blq.append(p(`Respuesta redactada por IA local · ${j.modelo} · ${j.segundos} s`,'estado'));
+    String(j.respuesta).split(/\n+/).filter(s=>s.trim()).forEach(s=>blq.append(p(s.replace(/\*\*/g,''))));
+    if(j.sin_verificar && j.sin_verificar.length)
+      blq.append(p(`Revisa estas cifras: la IA las mencionó pero no coinciden con los datos ni con sus diferencias: ${j.sin_verificar.join(', ')}. Confía en la gráfica y la tabla.`,'aviso err'));
+    if(j.pasos && j.pasos.length){
+      const det=document.createElement('details'); det.className='pasos';
+      const sum=document.createElement('summary'); sum.textContent=`Ver cómo obtuvo la respuesta (${j.pasos.length} paso${j.pasos.length>1?'s':''})`; det.append(sum);
+      const ol=document.createElement('ol');
+      j.pasos.forEach(s=>{const li=document.createElement('li'); li.textContent=s.descripcion; if(s.error) li.className='paso-error'; ol.append(li);});
+      det.append(ol); blq.append(det);
+    }
+    $('respuesta').prepend(blq);
+    if((j.graficas && j.graficas.length)||(j.tablas && j.tablas.length)){
+      $('panel-res').hidden=true;
+      let ref=$('respuesta');
+      (j.tablas||[]).forEach(t=>{const pn=panelTablaIA(t); ref.after(pn); ref=pn;});
+      (j.graficas||[]).filter(g=>g&&Array.isArray(g.ids)&&g.ids.every(id=>byId[id]&&SER[id])).forEach(g=>{const pn=panelIA(g); ref.after(pn); ref=pn; pn._render();});
+    }
+  }catch(e){
+    if(e.name==='AbortError') return;
+    $('respuesta').prepend(p(`No se obtuvo respuesta de la IA: ${e.message} Abajo tienes el resultado del buscador.`,'aviso err'));
+  }finally{ const w=document.getElementById('ia-espera'); if(w) w.remove(); }
+}
+(async()=>{
+  if(location.protocol==='file:') return;
+  try{
+    const r=await fetch('api/estado',{cache:'no-store'}); if(!r.ok) return;
+    const j=await r.json(); $('ia-box').hidden=false;
+    if(j.listo){ iaLista=true; $('ia-modelo').textContent=`Modelo ${j.modelo}, instalado en este servidor`; }
+    else { $('ia-activa').checked=false; $('ia-activa').disabled=true; $('ia-modelo').textContent=j.mensaje; }
+  }catch(_){}
+})();
+
+/* ---------- Explorador ---------- */
+const ejes=[...new Set(IND.map(i=>i.eje))];
+ejes.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;$('f-eje').appendChild(o);});
+const norm=Buscador.norm;
+let selExp=null;
+function pintarLista(){
+  const e=$('f-eje').value, q=norm($('f-texto').value.trim());
+  const res=IND.filter(i=>(!e||i.eje===e)&&(!q||norm(i.ruta+' '+i.eje).includes(q))&&SER[i.id]);
+  $('cuenta').textContent=`${res.length} indicadores con datos`;
+  const box=$('items'); box.innerHTML='';
+  res.forEach(i=>{const b=document.createElement('button'); b.className='item'+(i.id===selExp?' sel':''); b.type='button';
+    b.textContent=i.concepto; const sm=document.createElement('small'); const pr=i.ruta.split(' > '); sm.textContent=(pr.length>1?pr.slice(0,-1).join(' › ')+' · ':'')+i.eje; b.appendChild(sm);
+    b.onclick=()=>{selExp=i.id; pintarLista(); mostrar('exp',i.id);}; box.appendChild(b);});
+}
+$('f-eje').onchange=pintarLista; $('f-texto').oninput=pintarLista;
+selExp = IND.find(i=>i.archivo==='His01'&&i.ruta==='Matrícula').id;
+pintarLista(); mostrar('exp',selExp);
+
+/* ---------- Visor de tablas anuales ---------- */
+const tSel=$('t-sel'), tAnio=$('t-anio'), tGrupo=$('t-grupo');
+{ const grupos={}, ORD='ACIDEGPMRONUVB'; Object.values(TAB).sort((a,b)=>(ORD.indexOf(a.id[0])-ORD.indexOf(b.id[0]))||a.id.localeCompare(b.id)).forEach(T=>{ (grupos[T.seccion]=grupos[T.seccion]||[]).push(T); });
+  Object.entries(grupos).forEach(([sec,lista])=>{ const og=document.createElement('optgroup'); og.label=`${sec} (${lista.length})`;
+    lista.forEach(T=>{const o=document.createElement('option'); o.value=T.id; o.textContent=`${T.id} · ${T.titulo}${T.tipo==='lista'?' (lista)':''}`; og.appendChild(o);}); tSel.appendChild(og); });
+  const anios=[...new Set(Object.values(TAB).flatMap(T=>Object.keys(T.datos||T.renglones||{})))].sort();
+  $('t-intro').textContent=`${Object.keys(TAB).length} tablas de la Agenda Estadística (${(k=>k.length>1?k.slice(0,-1).join(', ')+' y '+k[k.length-1]:k.join(''))(Object.keys(grupos))}, ${anios.join(', ')}). Detalle por espacio universitario, programa, categoría y sexo. Toca el nombre de una columna para graficarla y elige qué filas comparar.`; }
+const tFiltro=$('t-filtro');
+let tCol=null;
+const esPrefijo=(a,b)=>a.length<b.length && a.every((x,k)=>x===b[k]);
+function gruposDe(T){ return T.filas.map((f,i)=>i).filter(i=>T.filas.some(g=>g.ruta.length===T.filas[i].ruta.length+1 && esPrefijo(T.filas[i].ruta,g.ruta))); }
+function filasDeGrupo(T,val){
+  if(val==='__principal') return T.filas.map((f,i)=>i).filter(i=>T.filas[i].ruta.length===1 && Buscador.norm(T.filas[i].ruta[0])!=='total');
+  const base=T.filas[+val].ruta;
+  return T.filas.map((f,i)=>i).filter(i=>T.filas[i].ruta.length===base.length+1 && esPrefijo(base,T.filas[i].ruta));
+}
+function pintarTablaLista(T){
+  if(tAnio.dataset.t!==T.id){ tAnio.innerHTML=''; Object.keys(T.renglones).sort().reverse().forEach(a=>{const o=document.createElement('option'); o.value=a; o.textContent=a; tAnio.appendChild(o);}); tAnio.dataset.t=T.id; }
+  tGrupo.hidden=true; $('t-grupo-lbl').hidden=true; $('t-graf').innerHTML='';
+  const a=tAnio.value, q=Buscador.norm(tFiltro.value.trim());
+  const tb=document.createElement('table'); tb.className='t-anual t-lista';
+  const hr=tb.createTHead().insertRow(); (T.encabezados[a]||[]).forEach(h=>{const th=document.createElement('th'); th.textContent=h; hr.appendChild(th);});
+  const body=tb.createTBody(); let n=0;
+  (T.renglones[a]||[]).forEach(fila=>{ if(q && !Buscador.norm(fila.join(' ')).includes(q)) return; n++;
+    const r=body.insertRow(); fila.forEach(v=>{ r.insertCell().textContent=v||'—'; }); });
+  $('t-vista').innerHTML=''; $('t-vista').appendChild(tb);
+  $('t-fuente').textContent=`${n} de ${(T.renglones[a]||[]).length} renglones · ${T.titulos[a]} · ${T.archivo}.xlsx · ${T.fuente[a]||''}`+((T.notas[a]||[]).length?' · '+T.notas[a].join(' '):'');
+}
+function pintarTabla(){
+  const T=TAB[tSel.value];
+  if(T.tipo==='lista') return pintarTablaLista(T);
+  tGrupo.hidden=false; $('t-grupo-lbl').hidden=false;
+  if(tAnio.dataset.t!==T.id){ tAnio.innerHTML=''; Object.keys(T.datos).sort().reverse().forEach(a=>{const o=document.createElement('option'); o.value=a; o.textContent=a; tAnio.appendChild(o);}); tAnio.dataset.t=T.id; }
+  if(tGrupo.dataset.t!==T.id){
+    tGrupo.innerHTML=''; const o0=document.createElement('option'); o0.value='__principal'; o0.textContent='Filas principales'; tGrupo.appendChild(o0);
+    gruposDe(T).forEach(i=>{const o=document.createElement('option'); o.value=i; o.textContent=T.filas[i].ruta.join(' › '); tGrupo.appendChild(o);});
+    const fac=[...tGrupo.options].find(o=>/(^| › )facultad$/i.test(o.textContent.trim()));  // también «Estudios profesionales › Facultad»
+    tGrupo.value=fac?fac.value:'__principal'; tGrupo.dataset.t=T.id; tCol=T.columnas.length-1;
+  }
+  const a=tAnio.value, mat=T.datos[a]||{}, conHijos=new Set(gruposDe(T));
+  const tb=document.createElement('table'); tb.className='t-anual';
+  const hr=tb.createTHead().insertRow(); hr.appendChild(document.createElement('th'));
+  T.columnas.forEach((c,j)=>{ const th=document.createElement('th'); const b=document.createElement('button'); b.type='button'; b.className='t-col'+(j===tCol?' sel':''); b.title='Graficar esta columna';
+    const cA=((T.columnas_anio||{})[a]||{})[j]||c;  // etiqueta de ese año (p. ej. «2023-2024»)
+    cA.forEach((parte,k)=>{ if(k) b.appendChild(document.createElement('br')); b.appendChild(document.createTextNode(parte)); });
+    b.onclick=()=>{ tCol=j; pintarTabla(); }; th.appendChild(b); hr.appendChild(th); });
+  const body=tb.createTBody(), qf=Buscador.norm(tFiltro.value.trim());
+  T.filas.forEach((f,i)=>{ if(qf && !Buscador.norm(f.ruta.join(' ')).includes(qf)) return; const r=body.insertRow(); const c0=r.insertCell(); c0.textContent=f.ruta[f.ruta.length-1]; c0.title=f.ruta.join(' › ');
+    c0.style.paddingLeft=(8+(f.ruta.length-1)*14)+'px'; if(conHijos.has(i)||Buscador.norm(f.ruta[0])==='total') c0.style.fontWeight='600';
+    T.columnas.forEach((c,j)=>{ const v=mat[i]?mat[i][j]:null; const td=r.insertCell(); td.textContent=v==null?'—':v.toLocaleString('es-MX',{maximumFractionDigits:2}); if(j===tCol) td.className='sel'; }); });
+  $('t-vista').innerHTML=''; $('t-vista').appendChild(tb);
+  $('t-fuente').textContent=`${T.titulos[a]} · ${T.archivo}.xlsx · ${T.fuente[a]||''}`+((T.notas[a]||[]).length?' · '+T.notas[a].join(' '):'');
+  const filas=filasDeGrupo(T,tGrupo.value).filter(i=>mat[i]&&mat[i][tCol]!=null);
+  const ids=filas.map(i=>`${T.id}.f${i}.c${tCol}`).filter(asegurarCelda);
+  $('t-graf').innerHTML='';
+  if(ids.length){
+    const grupoTxt=tGrupo.value==='__principal'?'filas principales':T.filas[+tGrupo.value].ruta.join(' › ');
+    const g={tipo:'comparar_anio', ids, anio:+a, titulo:`${T.columnas[tCol].join(' › ')} · ${grupoTxt}`};
+    const pn=panelIA(g); pn.className='panel panel-tabla'; $('t-graf').appendChild(pn); pn._render();
+    pn.querySelector('.fuente').textContent=`${T.titulos[a]} · ${T.archivo}.xlsx (Agenda Estadística ${a})`;
+  }
+}
+tSel.onchange=()=>{ tFiltro.value=''; pintarTabla(); }; tAnio.onchange=pintarTabla; tGrupo.onchange=pintarTabla;
+let tFiltroT=null; tFiltro.oninput=()=>{ clearTimeout(tFiltroT); tFiltroT=setTimeout(pintarTabla,200); };
+if(TAB.P02) tSel.value='P02';
+function abrirTabla(id){ tSel.value=id; pintarTabla(); $('sec-tablas').scrollIntoView({behavior:'smooth',block:'start'}); }
+pintarTabla();
+
+/* ---------- Estado inicial ---------- */
+const inicial='matrícula total';
+$('pregunta').value=''; buscar(inicial);
+$('respuesta').prepend(p('Ejemplo: matrícula total de la UAEMEX. Escribe tu propia búsqueda arriba.','estado'));
+})();
+</script>
+</body>
+</html>

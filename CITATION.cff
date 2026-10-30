@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software or data, please cite it as below."
+title: "Universidatos: Natural-language querying of the UAEMEX Statistical Agenda"
+type: software
+authors:
+  - family-names: "Marcial-Romero"
+    given-names: "J. Raymundo"
+    affiliation: "Facultad de Ingeniería, Universidad Autónoma del Estado de México"
+    orcid: "https://orcid.org/0000-0002-5808-5727"
+  - family-names: "Vidal Lopez"
+    given-names: "Rodrigo"
+    affiliation: "Facultad de Ciencias, Universidad Autónoma del Estado de México"
+    orcid: "https://orcid.org/0000-0002-5791-4618"
+version: "1.0.0"
+date-released: "2026-10-30"
+license: MIT
+repository-code: "https://github.com/jrmarcialr1207/universidatos"
+keywords:
+  - large language models
+  - higher education
+  - institutional data
+  - table question answering
