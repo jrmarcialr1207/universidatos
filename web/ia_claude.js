@@ -641,19 +641,10 @@ const MENSAJES_IA = {
   prompt_too_large: 'La consulta resultó demasiado grande. Pide menos años o menos indicadores a la vez.',
 };
 
-async function preguntarIA(b) {
-  if (!sample) return;
-  if (iaCtl) iaCtl.abort();
-  const ctl = iaCtl = new AbortController();
+// Núcleo del agente: arma las herramientas, consulta a Claude y devuelve el resultado (lo usan la página y el modo experimento).
+async function correrClaude(b, signal, avance = () => {}) {
   const candidatos = buscador.buscar(b.t, 10).resultados.map(r => r.id);
   const pasos = [], graficas = [], idsUsados = [], numsHerr = [], tablasIA = [];
-  const espera = p('Claude está trabajando… Suele tardar de 20 a 90 segundos; mientras tanto ya ves el dato del buscador.', 'estado');
-  espera.id = 'ia-espera';
-  const det = document.createElement('button'); det.type = 'button'; det.className = 'btn-mini'; det.textContent = 'Detener'; det.style.marginLeft = '10px';
-  det.onclick = () => ctl.abort(); espera.append(det);
-  $('respuesta').prepend(espera);
-  const avance = t => { const e = document.getElementById('ia-espera'); if (e && e.firstChild) e.firstChild.textContent = t; };
-
   const herramienta = (name, description, inputSchema) => ({
     name, description, inputSchema,
     execute(input) {
@@ -703,8 +694,23 @@ async function preguntarIA(b) {
   const prompt = `${INSTRUCCIONES}\n\nPregunta: ${b.t}${pista}\n\nIndicadores sugeridos (id: indicador):\n` +
     candidatos.map(i => `- ${i}: ${Calc.nombre(i)} (${byId[i].eje})`).join('\n');
   const t0 = performance.now();
+  const res = await sample(prompt, { tools, signal });
+  return { res, candidatos, pasos, graficas, idsUsados, numsHerr, tablasIA, segundos: (performance.now() - t0) / 1000 };
+}
+
+async function preguntarIA(b) {
+  if (!sample) return;
+  if (iaCtl) iaCtl.abort();
+  const ctl = iaCtl = new AbortController();
+  const espera = p('Claude está trabajando… Suele tardar de 20 a 90 segundos; mientras tanto ya ves el dato del buscador.', 'estado');
+  espera.id = 'ia-espera';
+  const det = document.createElement('button'); det.type = 'button'; det.className = 'btn-mini'; det.textContent = 'Detener'; det.style.marginLeft = '10px';
+  det.onclick = () => ctl.abort(); espera.append(det);
+  $('respuesta').prepend(espera);
+  const avance = t => { const e = document.getElementById('ia-espera'); if (e && e.firstChild) e.firstChild.textContent = t; };
+
   try {
-    const res = await sample(prompt, { tools, signal: ctl.signal });
+    const { res, candidatos, pasos, graficas, idsUsados, numsHerr, tablasIA, segundos } = await correrClaude(b, ctl.signal, avance);
     if (ctl !== iaCtl) return;
     const texto = String(res.text || '').replace(/\*\*/g, '').trim();
     const conDatos = idsUsados.filter(i => SER[i]);
@@ -712,7 +718,7 @@ async function preguntarIA(b) {
       respuesta: texto, graficas, pasos, tablas: tablasIA,
       id: graficas.length ? graficas[0].ids[0] : (conDatos[0] || candidatos[0]),
       sin_verificar: sinVerificar(texto, (conDatos.length ? conDatos : candidatos.slice(0, 3)).slice(0, 8), b.t, numsHerr),
-      etiqueta: `Respuesta de Claude · ${Math.round((performance.now() - t0) / 1000)} s${res.truncated ? ' · respuesta cortada' : ''}`,
+      etiqueta: `Respuesta de Claude · ${Math.round(segundos)} s${res.truncated ? ' · respuesta cortada' : ''}`,
     });
   } catch (e) {
     if (ctl !== iaCtl) return;
