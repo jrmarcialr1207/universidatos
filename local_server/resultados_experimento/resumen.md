@@ -4,6 +4,7 @@
 
 | Modelo | Condición | Respuestas | Exactitud (con dato) | Cifra incorrecta | Se abstuvo | Abstención correcta (sin dato) | Errores | Segundos (mediana) |
 |---|---|---|---|---|---|---|---|---|
+| claude (default) | claude | 52 | 100.0 % | 0.0 % | 0.0 % | 0.0 % | 0 | 2.8 |
 | llama3.1:8b | sin_herramientas | 52 | 0.0 % | 8.7 % | 91.3 % | 100.0 % | 0 | 2.0 |
 | llama3.1:8b | rag | 52 | 43.5 % | 39.1 % | 17.4 % | 50.0 % | 0 | 7.9 |
 | llama3.1:8b | herramientas | 52 | 8.7 % | 34.8 % | 56.5 % | 33.3 % | 0 | 16.1 |
@@ -17,6 +18,7 @@
 
 | Modelo | Condición | serie | cambio | tabla | orden | razon | cambio_espacio | ficha | sin_respuesta |
 |---|---|---|---|---|---|---|---|---|---|
+| claude (default) | claude | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 |
 | llama3.1:8b | sin_herramientas | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 100.0 |
 | llama3.1:8b | rag | 100.0 | 71.4 | 0.0 | 0.0 | 20.0 | 0.0 | 0.0 | 50.0 |
 | llama3.1:8b | herramientas | 0.0 | 42.9 | 0.0 | 0.0 | 20.0 | 0.0 | 0.0 | 33.3 |
