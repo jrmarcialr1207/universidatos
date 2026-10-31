@@ -28,8 +28,9 @@ ORO = {q["id"]: q for q in json.load(open(AQUI / "preguntas.json", encoding="utf
 ORDEN = ["sin_herramientas", "rag", "herramientas", "guiado"]
 
 ABSTENCION = re.compile(
-    r"no (?:tengo|cuento|hay|encontr\w*|dispon\w*|se (?:reporta|incluye|encuentra|tiene|cuenta)|incluye\w*|contiene\w*|aparece\w*|existe\w*|es posible|puedo|se puede|est[aá]n? disponible)"
-    r"|sin (?:datos|informaci[oó]n)|no se (?:dispone|conoce)|fuera del? (?:alcance|periodo)|carezco|desconozco|lo siento|no proporciona",
+    r"no (?:tengo|cuento|hay|encontr\w*|dispon\w*|incluye\w*|contiene\w*|aparece\w*|existe\w*|es posible|puedo|indica\w*|proporciona\w*|est[aá]n? (?:disponible|registrad)\w*)"
+    r"|no se (?:reporta|incluye|encuentra|encontr\w*|tiene|cuenta|dispone|conoce|muestra|pudo|puede|registra|proporciona)"
+    r"|sin (?:datos|informaci[oó]n)|fuera del? (?:alcance|periodo)|carezco|desconozco|lo siento",
     re.I)
 
 
@@ -44,7 +45,7 @@ def numeros(texto):
     t = texto.replace("−", "-").replace(" ", " ")
     t = re.sub(r"(?<=\d) (?=\d{3}\b)", "", t)  # 100 491 → 100491
     out = []
-    for m in re.finditer(r"-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?", t):
+    for m in re.finditer(r"(?<![A-Za-z\d.,])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![A-Za-z\d.,])-?\d+(?:\.\d+)?", t):
         s = m.group(0).replace(",", "")
         try:
             out.append(float(s))
@@ -67,8 +68,7 @@ def calificar(r):
         return "error"
     abst = bool(ABSTENCION.search(texto))
     if q["tipo"] == "abstener":
-        anios_preg = {float(a) for a in re.findall(r"\b(?:19|20)\d{2}\b", q["pregunta"])}
-        cifras = [x for x in numeros(texto) if x not in anios_preg]
+        cifras = [x for x in numeros(texto) if not (x == int(x) and 1990 <= x <= 2035)]  # los años no cuentan como cifra
         return "correcta" if abst and not cifras else ("abstencion_parcial" if abst else "incorrecta")
     if q["tipo"] == "texto":
         if norm(q["oro"]).replace("lic ", "").strip() in norm(texto):
