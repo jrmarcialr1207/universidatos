@@ -1,5 +1,7 @@
 # Universidatos
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23827807.svg)](https://doi.org/10.5281/zenodo.23827807)
+
 Natural-language querying of the Statistical Agenda (*Agenda Estadística*) of the Universidad Autónoma del Estado de México (UAEMEX), with language models and verifiable tools.
 
 Universidatos answers questions such as "How did enrollment change in each academic unit from 2018 to 2025?" and returns figures, calculations and charts that can be traced back to the cell of the official Excel file. A language model chooses the tools and writes the answer; deterministic tools read the data, calculate and plot, so the model never writes a figure of its own.
