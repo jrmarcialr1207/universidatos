@@ -58,7 +58,7 @@ def coincide(x, oro, tipo):
     x, o = abs(x), abs(oro)
     if tipo in ("porcentaje", "razon"):
         return abs(x - o) <= 0.15 or (x == int(x) and abs(x - o) <= 0.5)
-    return abs(x - o) <= max(0.5, 0.001 * o)
+    return abs(x - o) <= 0.5  # conteos y años: cifra exacta
 
 
 def calificar(r):
