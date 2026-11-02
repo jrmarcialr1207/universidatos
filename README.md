@@ -11,6 +11,7 @@ Universidatos answers questions such as "How did enrollment change in each acade
 | Folder | What it contains |
 | --- | --- |
 | `data/` | Processed data: 364 annual tables 2018–2025 (`tablas_uaemex.json`), 453 historical series 2004–2025 (`series_uaemex.json`, `series_uaemex_2004_2025.csv`), the equivalence file used to merge years (`equivalencias.json`) and the file-name origins of the 2018–2021 Agendas (`origenes_2018_2021.json`) |
+| `data/universidatos.sqlite` | The same tables and series as a relational SQLite database (one SQL table per Agenda table, catalog, academic units and Excel traceability); schema in `data/esquema_sqlite.md` |
 | `scripts/` | Download of the Agenda Excel files, the Excel reader, the series converter and the page builder |
 | `web/` | Source of the web interface (template, search engine, Claude agent code, fflate) |
 | `docs/` | Static site without a language model (search engine only), published with GitHub Pages at <https://jrmarcialr1207.github.io/universidatos/> |
