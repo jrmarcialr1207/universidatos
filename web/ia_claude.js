@@ -654,7 +654,7 @@ async function correrClaude(b, signal, avance = () => {}) {
       Calc.idsEn(input).forEach(i => { if (!idsUsados.includes(i)) idsUsados.push(i); });
       (res.series || []).forEach(s => { if (!idsUsados.includes(s.id)) idsUsados.push(s.id); });
       if (res.grafica) graficas.push(res.grafica);
-      if (res.tabla && tablasIA.length < 2) tablasIA.push(res.tabla);
+      if (res.tabla && typeof res.tabla === 'object' && Array.isArray(res.tabla.encabezados) && tablasIA.length < 2) tablasIA.push(res.tabla);  // consultar_tabla y ordenar_filas devuelven solo el id de la tabla
       numsHerr.push(...numerosEn(res));
       pasos.push({ descripcion: res.descripcion || res.error, error: !!res.error });
       avance(`Claude está trabajando… ${res.descripcion || 'revisando'}`);
