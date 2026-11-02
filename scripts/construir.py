@@ -42,7 +42,7 @@ for a, b in [(' Redactar la respuesta con IA local</label>', ' Responder tambié
               'Escribe lo que buscas, por ejemplo «matrícula licenciatura 2020», o pide un cálculo o una gráfica: «crecimiento anual de la matrícula desde 2015», «grafica la matrícula por nivel». El buscador responde al instante y Claude redacta, calcula y grafica con los datos oficiales.')]:
     assert body.count(a) == 1, a
     body = body.replace(a, b)
-pag = '<title>Consulta Universidatos UAEMEX</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n' + head + body
+pag = '<title>Universidatos con IA · UAEMEX</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n' + head + body
 pag = comprimir(pag).replace('__BUSCADOR__', busc).replace('__DATA__', data)
 assert 'api/estado' not in pag
 open(B + 'claude_page/consulta-universidatos.html', 'w', encoding='utf-8').write(pag)

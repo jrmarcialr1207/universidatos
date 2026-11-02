@@ -18,7 +18,7 @@ estilo = """<style>
 #xpc-tabla th:nth-child(1){width:48px}#xpc-tabla th:nth-child(2){width:38%}#xpc-tabla th:nth-child(4){width:44px}
 </style>
 """
-pag = pag.replace('<title>Consulta Universidatos UAEMEX</title>', '<title>Experimento Universidatos</title>', 1)
+pag = pag.replace('<title>Universidatos con IA · UAEMEX</title>', '<title>Experimento Universidatos con IA</title>', 1)
 i = pag.index('<script>\n(function(){\nconst D = JSON.parse(')
 pag = pag[:i] + estilo + '<script id="preguntas-exp" type="application/json">' + json.dumps(preg, ensure_ascii=False).replace('</', '<\\/') + '</script>\n' + pag[i:]
 fin = '})();\n</script>'

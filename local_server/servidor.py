@@ -1,5 +1,5 @@
 """
-Consulta Universidatos UAEMEX + IA local con Ollama.
+Universidatos con IA (UAEMEX): versión local con Ollama.
 
 Uso:
   1. Instala Ollama (https://ollama.com) y descarga un modelo:
@@ -482,7 +482,7 @@ def permitido(ip):
 # ---------------------------------------------------------------- servidor web
 
 class Manejador(BaseHTTPRequestHandler):
-    server_version = "Universidatos/1.0"
+    server_version = "UniversidatosIA/1.0"
 
     def _json(self, codigo, obj):
         datos = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -542,7 +542,7 @@ class Manejador(BaseHTTPRequestHandler):
 
 def main():
     e = estado()
-    print("Consulta Universidatos con IA local")
+    print("Universidatos con IA (versión local con Ollama)")
     print(f"  Modelo: {MODELO} · Ollama: {OLLAMA} · Modo: {MODO}")
     print(f"  Estado: {e['mensaje']}")
     direccion = "localhost" if HOST in ("127.0.0.1", "localhost") else HOST

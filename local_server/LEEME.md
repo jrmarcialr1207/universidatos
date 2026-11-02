@@ -1,4 +1,4 @@
-# Consulta Universidatos con IA local (Ollama)
+# Universidatos con IA: versión local (Ollama)
 
 La IA corre en tu propia computadora o en un servidor de la universidad. No pagas por consulta y los datos no salen de tu equipo.
 
