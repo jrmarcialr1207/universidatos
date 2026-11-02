@@ -138,21 +138,26 @@ CREATE TABLE columnas (
 );
 CREATE TABLE columnas_anio (           -- encabezados que cambian de un año a otro (p. ej. «Matrícula 2024-2025»)
   tabla_id TEXT NOT NULL, columna_sql TEXT NOT NULL, anio INTEGER NOT NULL, etiqueta TEXT NOT NULL,
-  PRIMARY KEY (tabla_id, columna_sql, anio)
+  PRIMARY KEY (tabla_id, columna_sql, anio),
+  FOREIGN KEY (tabla_id, columna_sql) REFERENCES columnas(tabla_id, columna_sql),
+  FOREIGN KEY (tabla_id, anio) REFERENCES tablas_anio(tabla_id, anio)
 );
 CREATE TABLE espacios (                -- espacios académicos con ficha propia en la Agenda
   espacio_id     TEXT PRIMARY KEY,      -- id de su ficha: O15 Facultad de Ingeniería, U08 CU Tianguistenco, B01 Plantel Cuauhtémoc...
   espacio        TEXT NOT NULL,         -- nombre corto como aparece en los renglones, p. ej. Ingeniería
   nombre         TEXT NOT NULL,         -- nombre completo, p. ej. Facultad de Ingeniería
-  tipo_espacio   TEXT NOT NULL          -- Facultad | Escuela | Plantel de la Escuela Preparatoria | Centro universitario UAEM | Unidad académica profesional | Instituto o centro de investigación
+  tipo_espacio   TEXT NOT NULL,         -- Facultad | Escuela | Plantel de la Escuela Preparatoria | Centro universitario UAEM | Unidad académica profesional | Instituto o centro de investigación
+  FOREIGN KEY (espacio_id) REFERENCES tablas(tabla_id)   -- su ficha
 );
 CREATE TABLE fichas (
-  tabla_id TEXT NOT NULL REFERENCES tablas(tabla_id),
-  espacio  TEXT NOT NULL,               -- nombre completo, p. ej. Facultad de Ingeniería
-  anio     INTEGER NOT NULL,
-  renglon  INTEGER NOT NULL,
-  seccion  TEXT, concepto TEXT, valor TEXT,
-  PRIMARY KEY (tabla_id, anio, renglon)
+  tabla_id   TEXT NOT NULL,             -- id de la ficha (es el mismo que espacio_id)
+  espacio_id TEXT NOT NULL REFERENCES espacios(espacio_id),
+  espacio    TEXT NOT NULL,             -- nombre completo, p. ej. Facultad de Ingeniería
+  anio       INTEGER NOT NULL,
+  renglon    INTEGER NOT NULL,
+  seccion    TEXT, concepto TEXT, valor TEXT,
+  PRIMARY KEY (tabla_id, anio, renglon),
+  FOREIGN KEY (tabla_id, anio) REFERENCES tablas_anio(tabla_id, anio)
 );
 CREATE TABLE indicadores (
   indicador_id TEXT PRIMARY KEY,        -- p. ej. His01-46
@@ -169,13 +174,16 @@ CREATE TABLE valores_series (
   valor        REAL,
   PRIMARY KEY (indicador_id, anio)
 );
-CREATE TABLE excel_filas (
+CREATE TABLE excel_filas (            -- fila_id corresponde a t_<tabla_id>(anio, fila_id) o, en listas, a t_<tabla_id>(anio, renglon)
   tabla_id TEXT NOT NULL, anio INTEGER NOT NULL, fila_id INTEGER NOT NULL, fila_excel INTEGER NOT NULL,
-  PRIMARY KEY (tabla_id, anio, fila_id)
+  PRIMARY KEY (tabla_id, anio, fila_id),
+  FOREIGN KEY (tabla_id, anio) REFERENCES tablas_anio(tabla_id, anio)
 );
 CREATE TABLE excel_columnas (
   tabla_id TEXT NOT NULL, anio INTEGER NOT NULL, columna_sql TEXT NOT NULL, columna_excel TEXT NOT NULL,
-  PRIMARY KEY (tabla_id, anio, columna_sql)
+  PRIMARY KEY (tabla_id, anio, columna_sql),
+  FOREIGN KEY (tabla_id, anio) REFERENCES tablas_anio(tabla_id, anio),
+  FOREIGN KEY (tabla_id, columna_sql) REFERENCES columnas(tabla_id, columna_sql)
 );
 """)
 
@@ -205,7 +213,8 @@ for tid in sorted(T):
         defs = ", ".join(f"{q(c)} REAL" for c in cols)
         db.execute(f"""CREATE TABLE {tsql} (anio INTEGER NOT NULL, fila_id INTEGER NOT NULL, ruta TEXT NOT NULL,
             nivel1 TEXT, nivel2 TEXT, nivel3 TEXT, nivel4 TEXT, nivel5 TEXT, profundidad INTEGER NOT NULL, es_subtotal INTEGER NOT NULL,
-            bloque TEXT, tipo_espacio TEXT, espacio_id TEXT, espacio TEXT, detalle TEXT, {defs}, PRIMARY KEY (anio, fila_id))""")
+            bloque TEXT, tipo_espacio TEXT, espacio_id TEXT REFERENCES espacios(espacio_id), espacio TEXT, detalle TEXT, {defs}, PRIMARY KEY (anio, fila_id))""")
+        db.execute(f"CREATE INDEX ix_{tsql}_espacio ON {tsql}(espacio_id, anio)")
         filas_sql = []
         for a in anios:
             d = t["datos"].get(a, {})
@@ -257,7 +266,7 @@ for tid in sorted(T):
                 if isinstance(fx, list) and k < len(fx) and fx[k] is not None:
                     db.execute("INSERT INTO excel_filas VALUES (?,?,?,?)", (tid, int(a), k, int(fx[k])))
                 if es_ficha and len(r) >= 3:
-                    db.execute("INSERT INTO fichas VALUES (?,?,?,?,?,?,?)", (tid, t["titulo"], int(a), k, r[0], r[1], str(r[2])))
+                    db.execute("INSERT INTO fichas VALUES (?,?,?,?,?,?,?,?)", (tid, tid, t["titulo"], int(a), k, r[0], r[1], str(r[2])))
 
 for eid, (corto, nom, tipo) in sorted(ESPACIOS.items()):
     db.execute("INSERT INTO espacios VALUES (?,?,?,?)", (eid, corto, nom, tipo))
@@ -270,6 +279,8 @@ for k, s in S["series"].items():
         n_val += 1
 db.execute("CREATE INDEX ix_valores_anio ON valores_series(anio)")
 db.execute("CREATE INDEX ix_fichas_concepto ON fichas(concepto)")
+malas = db.execute("PRAGMA foreign_key_check").fetchall()
+assert not malas, f"llaves foráneas rotas: {malas[:5]}"
 db.commit()
 db.execute("VACUUM")
 db.close()

@@ -31,6 +31,51 @@ Contiene todas las tablas anuales (2018–2025) y las series históricas (2004�
 | `excel_filas` | Renglón del Excel original de cada `fila_id` (o `renglon`) por tabla y año |
 | `excel_columnas` | Columna (letra) del Excel original de cada `columna_sql` por tabla y año |
 
+## Llaves primarias y foráneas
+
+Todas las tablas tienen llave primaria y las relaciones están declaradas como llaves foráneas; `PRAGMA foreign_key_check` no reporta ninguna violación. SQLite solo las hace cumplir al escribir si la conexión activa `PRAGMA foreign_keys = ON`.
+
+| Tabla | Llave primaria | Llaves foráneas |
+|---|---|---|
+| `tablas` | `tabla_id` | — |
+| `tablas_anio` | `(tabla_id, anio)` | `tabla_id` → `tablas` |
+| `columnas` | `(tabla_id, columna_sql)` | `tabla_id` → `tablas` |
+| `columnas_anio` | `(tabla_id, columna_sql, anio)` | `(tabla_id, columna_sql)` → `columnas`; `(tabla_id, anio)` → `tablas_anio` |
+| `espacios` | `espacio_id` | `espacio_id` → `tablas` (su ficha) |
+| `t_<id>` numéricas | `(anio, fila_id)` | `espacio_id` → `espacios` |
+| `t_<id>` listas | `(anio, renglon)` | — |
+| `fichas` | `(tabla_id, anio, renglon)` | `espacio_id` → `espacios`; `(tabla_id, anio)` → `tablas_anio` |
+| `indicadores` | `indicador_id` | — |
+| `valores_series` | `(indicador_id, anio)` | `indicador_id` → `indicadores` |
+| `excel_filas` | `(tabla_id, anio, fila_id)` | `(tabla_id, anio)` → `tablas_anio` |
+| `excel_columnas` | `(tabla_id, anio, columna_sql)` | `(tabla_id, anio)` → `tablas_anio`; `(tabla_id, columna_sql)` → `columnas` |
+
+Dos relaciones no pueden declararse como llave foránea porque apuntan a una tabla distinta según el valor de `tabla_id`: `excel_filas.fila_id` corresponde a `t_<tabla_id>(anio, fila_id)` y `tablas.tabla_sql` es el nombre de la tabla de datos. Se resuelven uniendo por `tabla_id`, como en el último ejemplo.
+
+```mermaid
+erDiagram
+  tablas ||--o{ tablas_anio : "tabla_id"
+  tablas ||--o{ columnas : "tabla_id"
+  columnas ||--o{ columnas_anio : "tabla_id, columna_sql"
+  tablas ||--o| espacios : "ficha = espacio_id"
+  espacios ||--o{ T_NUMERICA : "espacio_id"
+  espacios ||--o{ fichas : "espacio_id"
+  tablas_anio ||--o{ excel_filas : "tabla_id, anio"
+  tablas_anio ||--o{ excel_columnas : "tabla_id, anio"
+  indicadores ||--o{ valores_series : "indicador_id"
+```
+
+Las tablas de datos (`t_a26`, `t_p03`…) se relacionan entre sí por `espacio_id` y `anio`, por ejemplo para calcular alumnos por profesor de tiempo completo:
+
+```sql
+SELECT e.nombre, m.total * 1.0 / (p.profesoras_es_tiempo_completo_hombres + p.profesoras_es_tiempo_completo_mujeres) AS alumnos_por_ptc
+FROM t_a26 m
+JOIN t_p03 p ON p.espacio_id = m.espacio_id AND p.anio = m.anio AND p.detalle IS NULL
+JOIN espacios e ON e.espacio_id = m.espacio_id
+WHERE m.anio = 2025 AND m.detalle IS NULL AND e.tipo_espacio = 'Facultad'
+ORDER BY alumnos_por_ptc;
+```
+
 ## Convenciones
 
 - El renglón de un espacio tiene `espacio_id` y `detalle IS NULL`; sus programas tienen el mismo `espacio_id` y el nombre del programa en `detalle`.
