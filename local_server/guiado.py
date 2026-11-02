@@ -229,6 +229,16 @@ def desglose_programas(plan, vistas, nombre, q):
                               + (f". Total de {nombre}: {fmt(tot)}." if tot is not None else "."))
         if plan.grafica({"tipo": "comparar_anio", "ids": ids, "titulo": f"{nombre} por programa · {col} · {T['titulo']} {a}"}):
             plan.hechos.insert(1, f"Se muestra una gráfica de barras con cada programa educativo de {nombre} (tabla {tid}).")
+        # tabla completa del desglose: hombres, mujeres y total de cada programa
+        cols_t = [" › ".join(x) for x in T["columnas"]]
+        extra = [cols_t.index(x) for x in ("Total › Hombres", "Total › Mujeres") if x in cols_t and cols_t.index(x) != c]
+        enc = ["Programa educativo"] + [cols_t[j] for j in extra] + [col]
+        filas_t = [{"nombre": T["filas"][i]["ruta"][-1].strip(), "textos": [fmt(valor(T, a, i, j)) for j in extra] + [fmt(v)]} for i, v in datos]
+        if tot is not None:
+            filas_t.append({"nombre": f"Total de {nombre}", "textos": [fmt(valor(T, a, f, j)) for j in extra] + [fmt(tot)]})
+        plan.tablas.append({"titulo": f"{T['titulos'][a]} · {nombre} por programa educativo"[:160], "encabezados": enc, "filas": filas_t,
+                            "fuente": f"Fuente: Agenda Estadística, tabla {tid}."})
+        plan.hechos.insert(2, f"Se muestra abajo la tabla completa con los {len(datos)} programas de {nombre} (tabla {tid}).")
         return True
     return False
 
@@ -1694,6 +1704,10 @@ def planear(ses, pregunta):
     if ses.tab:
         grupos, espacios = detectar(q, indice_espacios(ses.tab))
         espacios = [e for e in espacios if not NIVELES_ESP.match(e[0])]  # «licenciatura» es nivel, no un espacio
+        # un mismo espacio puede aparecer en varios grupos o bloques (Tianguistenco: centro universitario, antes UAP);
+        # si todos tienen el mismo nombre es UN espacio, no una comparación
+        if len(espacios) >= 2 and len({e[1] for e in espacios}) == 1:
+            espacios = sorted(espacios, key=lambda e: 0 if any(e[2].startswith(g) for g in grupos) else 1)[:1]
         if not grupos and not espacios and re.search(r"\b(por|cada|en cada) espacios?\b", q):
             grupos = ["*"]
         if not espacios and RANK_PROG.search(q) and EXTREMO.search(q) and ranking_programas(plan, q):
