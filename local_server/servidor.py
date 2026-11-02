@@ -401,6 +401,7 @@ Reglas:
 4. El PRIMER hecho es el que mejor responde la pregunta: empieza por él. Los demás son contexto; no mezcles niveles (licenciatura, posgrado, bachillerato) ni tablas distintas como si fueran lo mismo.
 4b. Si hay muchas cifras, destaca las más importantes para la pregunta; no las enumeres todas.
 5. Si HECHOS no responde algo de la pregunta, dilo en una frase.
+5b. Si la pregunta nombra un espacio (facultad, plantel, centro, unidad) que HECHOS no menciona, di que no encontraste datos de ese espacio; nunca le atribuyas totales de toda la universidad ni cifras de otros espacios.
 6. Si HECHOS dice que se muestra una gráfica o una tabla, menciona que está abajo; no copies toda la tabla en el texto.
 6b. PTC significa profesoras y profesores de tiempo completo (nunca «personal técnico científico»). SNII es el Sistema Nacional de Investigadoras e Investigadores.
 7. Responde en español, en 3 a 6 frases, sin listas, títulos ni negritas.

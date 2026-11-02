@@ -83,6 +83,34 @@ def indice_espacios(tab):
     return sorted(((n, nombre, g) for (n, g), nombre in vistos.items()), key=lambda x: -len(x[0]))
 
 
+def _edicion(a, b):
+    """Distancia de edición (Levenshtein) entre dos palabras cortas."""
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _parecido(n, toks):
+    """Distancia de la mejor coincidencia aproximada del nombre n en la pregunta (Tiaguistenco → Tianguistenco),
+    o None si no hay. Solo nombres largos y a lo más 1 (o 2 si el nombre es largo) letras de diferencia."""
+    partes = n.split()
+    k = len(partes)
+    if len(n) < 7:
+        return None
+    mejor = None
+    for i in range(len(toks) - k + 1):
+        w = " ".join(toks[i:i + k])
+        if abs(len(w) - len(n)) <= 2 and w[0] == n[0]:
+            d = _edicion(w, n)
+            if d <= (1 if len(n) < 10 else 2) and (mejor is None or d < mejor):
+                mejor = d
+    return mejor
+
+
 def detectar(q, espacios):
     grupos = [tok for rx, tok in GRUPOS if re.search(rx, q)]
     texto = " " + q + " "
@@ -92,6 +120,13 @@ def detectar(q, espacios):
             if grupos and not any(tok in g for tok in grupos):
                 continue
             hallados.append((n, nombre, g))
+    if not hallados:  # sin coincidencia exacta: tolerar una errata en nombres largos
+        toks = re.findall(r"[a-z0-9]+", q)
+        cand = [(d, (n, nombre, g)) for n, nombre, g in espacios
+                if (d := _parecido(n, toks)) is not None and not (grupos and not any(tok in g for tok in grupos))]
+        if cand:
+            dmin = min(d for d, _ in cand)
+            hallados = [e for d, e in cand if d == dmin]
     # quitar nombres contenidos en otro más largo ya encontrado («ciencias» dentro de «ciencias agricolas»)
     finales = []
     for h in hallados:
@@ -194,7 +229,7 @@ def elegir_columna(T, q):
 # ------------------------------------------------------------------ rutas
 
 ALUMNADO = re.compile(r"matricul|alumn|estudiant|egresad|titulad|aspirant|ingreso|eficiencia|abandono|reprobac|inscrit|discapacid")
-POR_PROGRAMA = re.compile(r"por (programa|carrera|licenciatura|plan|maestria|doctorado|especialidad)|programas|carreras|licenciaturas")
+POR_PROGRAMA = re.compile(r"por (programa|carrera|licenciatura|plan|maestria|doctorado|especialidad)|programas|carreras|licenciaturas|desglos")
 
 
 def desglose_programas(plan, vistas, nombre, q):
