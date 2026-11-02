@@ -638,6 +638,7 @@ const MENSAJES_IA = {
   session_expired: 'Tu sesión de Claude expiró. Vuelve a iniciar sesión.',
   refused: 'Claude no pudo responder esa pregunta. Intenta formularla de otra forma.',
   empty_completion: 'Claude no devolvió texto. Intenta con una pregunta más concreta.',
+  upstream_error: 'Falló la conexión con Claude o el servicio estuvo ocupado (es temporal). Intenta de nuevo en un momento.',
   prompt_too_large: 'La consulta resultó demasiado grande. Pide menos años o menos indicadores a la vez.',
 };
 
@@ -723,7 +724,8 @@ async function preguntarIA(b) {
   } catch (e) {
     if (ctl !== iaCtl) return;
     if (e && e.code === 'cancelled') { $('respuesta').prepend(p('Consulta a Claude detenida.', 'estado')); return; }
-    $('respuesta').prepend(p(MENSAJES_IA[e && e.code] || 'Hubo un problema al consultar a Claude. Intenta de nuevo.', 'aviso err'));
+    console.warn('Claude:', e && e.code, e && e.message);
+    $('respuesta').prepend(p(MENSAJES_IA[e && e.code] || `Hubo un problema al consultar a Claude (${(e && e.code) || 'error'}${e && e.message ? ': ' + String(e.message).slice(0, 160) : ''}). Intenta de nuevo.`, 'aviso err'));
     if (e && ['not_granted', 'sampling_disabled', 'tools_unavailable', 'not_declared', 'capability_disabled', 'capability_removed'].includes(e.code)) desactivarIA(MENSAJES_IA[e.code] || '');
   } finally { const w = document.getElementById('ia-espera'); if (w) w.remove(); }
 }
