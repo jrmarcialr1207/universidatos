@@ -1,4 +1,4 @@
-"""Builds claude_page/consulta-universidatos.html (Claude version) and the index.html files of static_site/ and local_server/ from web/ and data/."""
+"""Builds claude_page/consulta-universidatos.html (Claude version) and the index.html files of docs/ and local_server/ from web/ and data/."""
 import re
 from pathlib import Path
 B = str(Path(__file__).resolve().parent.parent) + '/'
@@ -21,7 +21,7 @@ def comprimir(html):
 # index.html para GitHub Pages y Ollama
 head = headc.replace('<style>\n/* Layout', '<style>\n[hidden]{display:none!important}\nhtml,body{margin:0}\nimg{max-width:100%}\n/* Layout', 1)
 idx = comprimir(t.replace('__HEAD__', head)).replace('__BUSCADOR__', busc).replace('__DATA__', data)
-for f in ['static_site/index.html', 'local_server/index.html']:
+for f in ['docs/index.html', 'local_server/index.html']:
     open(B + f, 'w', encoding='utf-8').write(idx)
 # versión Claude
 js = open(B + 'web/ia_claude.js', encoding='utf-8').read()

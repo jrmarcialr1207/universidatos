@@ -13,7 +13,7 @@ Universidatos answers questions such as "How did enrollment change in each acade
 | `data/` | Processed data: 364 annual tables 2018–2025 (`tablas_uaemex.json`), 453 historical series 2004–2025 (`series_uaemex.json`, `series_uaemex_2004_2025.csv`), the equivalence file used to merge years (`equivalencias.json`) and the file-name origins of the 2018–2021 Agendas (`origenes_2018_2021.json`) |
 | `scripts/` | Download of the Agenda Excel files, the Excel reader, the series converter and the page builder |
 | `web/` | Source of the web interface (template, search engine, Claude agent code, fflate) |
-| `static_site/` | Static site without a language model (search engine only); publishable on any web server or GitHub Pages |
+| `docs/` | Static site without a language model (search engine only), published with GitHub Pages at <https://jrmarcialr1207.github.io/universidatos/> |
 | `claude_page/` | Page that uses Claude as the agent (runs as a Claude artifact) |
 | `local_server/` | Local server with a language model running on Ollama (default Qwen2.5-7B) and the guided mode; works offline. Instructions in `local_server/LEEME.md` (Spanish) |
 
@@ -32,7 +32,7 @@ pip install openpyxl requests beautifulsoup4
 python scripts/descargar_agendas_uaemex.py          # downloads the Agenda Excel files
 # arrange the files by year in datos_anuales/<year>/ (see local_server/LEEME.md, section "Tablas anuales")
 python scripts/tablas_a_json.py data/tablas_uaemex.json datos_anuales/2025 datos_anuales/2024 datos_anuales/2023 datos_anuales/2022 datos_anuales/2021 datos_anuales/2020 datos_anuales/2019 datos_anuales/2018
-python scripts/construir.py                         # rebuilds static_site/, local_server/ and claude_page/
+python scripts/construir.py                         # rebuilds docs/, local_server/ and claude_page/
 ```
 
 Every cell in `tablas_uaemex.json` keeps its Excel row and column, so any value can be checked against the original file.
