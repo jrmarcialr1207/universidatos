@@ -55,3 +55,11 @@ python evaluar.py
 ```
 
 Cada respuesta guarda también la consulta SQL y los intentos. `sql_referencia.json` tiene la consulta correcta de cada pregunta con respuesta.
+
+### Análisis de las respuestas de texto a SQL
+
+`analizar_sql.py` vuelve a ejecutar la consulta final de cada respuesta de texto a SQL de los modelos locales sobre
+`universidatos.sqlite`, compara su resultado con la respuesta de referencia y clasifica cada falla (consulta sobre otra
+fuente, columna o filtro equivocado, abstención con dato existente, error sin corregir, redacción equivocada). Escribe
+`resultados_experimento/clasificacion_texto_sql.csv`. Las respuestas de Claude en esta condición están en
+`resultados_experimento/resultados_claude_sql.jsonl` (página «Experimento texto a SQL»).
