@@ -25,7 +25,7 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 ORO = {q["id"]: q for q in json.load(open(AQUI / "preguntas.json", encoding="utf-8"))}
-ORDEN = ["sin_herramientas", "rag", "herramientas", "guiado"]
+ORDEN = ["sin_herramientas", "rag", "herramientas", "guiado", "texto_sql", "claude", "claude_sql"]
 
 ABSTENCION = re.compile(
     r"no (?:tengo|cuento|hay|encontr\w*|dispon\w*|incluye\w*|contiene\w*|aparece\w*|existe\w*|es posible|puedo|indica\w*|proporciona\w*|est[aá]n? (?:disponible|registrad)\w*)"

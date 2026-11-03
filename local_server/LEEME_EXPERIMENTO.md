@@ -40,3 +40,18 @@ Genera `resumen.md` (tablas de resultados) y `calificacion.csv` (cada respuesta 
 
 - No cierres la computadora ni la dejes suspender mientras corre.
 - `generar_preguntas.py` vuelve a crear `preguntas.json` a partir de los datos (no necesitas correrlo).
+
+## Condición texto a SQL (segundo artículo)
+
+El modelo recibe el esquema de las tablas más parecidas a la pregunta en la base relacional `universidatos.sqlite`, escribe una consulta SQLite, el sistema la ejecuta (solo lectura, hasta 2 correcciones si falla o sale vacía) y el modelo redacta la respuesta con el resultado.
+
+1. Copia `texto_sql.py` y `universidatos.sqlite` a la carpeta del servidor (si usas el zip, ya vienen).
+2. Corre:
+
+```
+python experimento.py --condiciones texto_sql
+python experimento.py --modelo llama3.1:8b --condiciones texto_sql
+python evaluar.py
+```
+
+Cada respuesta guarda también la consulta SQL y los intentos. `sql_referencia.json` tiene la consulta correcta de cada pregunta con respuesta.

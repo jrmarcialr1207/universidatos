@@ -12,6 +12,8 @@ Condiciones:
   rag               el modelo recibe las series más parecidas a la pregunta y redacta (recuperación + generación)
   herramientas      el modelo elige y llama las 14 herramientas del sistema
   guiado            el planificador calcula los hechos y el modelo solo redacta (si no hay patrón, usa herramientas)
+  texto_sql         el modelo escribe una consulta SQLite sobre universidatos.sqlite y redacta con el resultado
+                    (se corre aparte: python experimento.py --condiciones texto_sql)
 
 Las respuestas se guardan en resultados_<modelo>.jsonl. Si el proceso se interrumpe, al volver a correrlo
 continúa donde se quedó. Después ejecuta:  python evaluar.py
@@ -25,11 +27,11 @@ import traceback
 from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
-CONDICIONES = ["sin_herramientas", "rag", "herramientas", "guiado"]
+CONDICIONES = ["sin_herramientas", "rag", "herramientas", "guiado", "texto_sql"]
 
 p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 p.add_argument("--modelo", default=os.environ.get("MODELO", "qwen2.5:7b"))
-p.add_argument("--condiciones", nargs="+", default=CONDICIONES, choices=CONDICIONES)
+p.add_argument("--condiciones", nargs="+", default=CONDICIONES[:4], choices=CONDICIONES)
 p.add_argument("--repeticiones", type=int, default=1)
 p.add_argument("--preguntas", default=str(AQUI / "preguntas.json"))
 p.add_argument("--solo", nargs="*", help="ids de preguntas a correr (por ejemplo Q01 Q15)")
@@ -41,6 +43,15 @@ import servidor  # noqa: E402
 from buscador import Buscador, analizar  # noqa: E402
 
 BUSCADOR = Buscador(servidor.DATOS["indicadores"], servidor.DATOS["series"])
+TSQL = None
+
+
+def llm(mensajes, formato):
+    cuerpo = {"model": a.modelo, "stream": False, "keep_alive": "30m", "messages": mensajes, "format": formato,
+              "options": {"temperature": 0.1, "num_ctx": 12288}}
+    if "qwen3" in a.modelo or "deepseek-r1" in a.modelo or "gpt-oss" in a.modelo:
+        cuerpo["think"] = False
+    return servidor.ollama("/api/chat", cuerpo).get("message", {}).get("content", "")
 
 SISTEMA_BASE = ("Eres un asistente que responde preguntas sobre la Universidad Autónoma del Estado de México (UAEMEX). "
                 "Responde en español, en 1 a 3 frases, con la cifra exacta si la conoces. Si no tienes el dato, dilo.")
@@ -74,6 +85,12 @@ def correr(cond, pregunta):
         return servidor.preguntar(pregunta, cand, desde, hasta, unico)
     if cond == "herramientas":
         return servidor.preguntar_con_herramientas(pregunta, cand, desde, hasta, unico)
+    if cond == "texto_sql":
+        global TSQL
+        if TSQL is None:
+            import texto_sql
+            TSQL = texto_sql.TextoSQL(servidor.CALC, BUSCADOR, llm)
+        return TSQL.preguntar(pregunta)
     if cond == "guiado":
         r = servidor.preguntar_guiado(pregunta, desde, hasta, unico)
         if r:
@@ -113,12 +130,13 @@ def main():
                     try:
                         r = correr(cond, q["pregunta"])
                         texto, modo, error = str(r.get("respuesta", "")), r.get("modo", cond), None
+                        extra = {k: r[k] for k in ("sql", "intentos", "tablas_esquema") if k in r}
                     except Exception as e:  # se registra y se sigue con la siguiente
-                        texto, modo, error = "", cond, f"{type(e).__name__}: {e}"
+                        texto, modo, error, extra = "", cond, f"{type(e).__name__}: {e}", {}
                         traceback.print_exc(limit=1)
                     seg = round(time.time() - inicio, 1)
                     f.write(json.dumps({"id": q["id"], "condicion": cond, "repeticion": rep, "modelo": a.modelo, "modo_usado": modo,
-                                        "pregunta": q["pregunta"], "respuesta": texto, "error": error, "segundos": seg},
+                                        "pregunta": q["pregunta"], "respuesta": texto, "error": error, "segundos": seg, **extra},
                                        ensure_ascii=False) + "\n")
                     f.flush()
                     print(f"[{n}/{total}] {cond:16s} {q['id']} {seg:6.1f}s  {texto[:90].replace(chr(10), ' ')}{'  ERROR: ' + error if error else ''}")
