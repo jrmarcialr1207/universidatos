@@ -11,10 +11,10 @@ authors:
     given-names: "Rodrigo"
     affiliation: "Facultad de Ciencias, Universidad Autónoma del Estado de México"
     orcid: "https://orcid.org/0000-0002-5791-4618"
-version: "1.0.0"
+version: "1.1.0"
 date-released: "2026-10-30"
 license: MIT
-doi: "10.5281/zenodo.23827807"
+doi: "10.5281/zenodo.23903837"
 repository-code: "https://github.com/jrmarcialr1207/universidatos"
 keywords:
   - large language models
