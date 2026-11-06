@@ -567,7 +567,9 @@ const Calc = (() => {
       const resumen = l.map(i => {
         const t = tramo(i, d, h), ks = Object.keys(t).map(Number), k1 = ks[0], k2 = ks[ks.length - 1];
         const km = ks.reduce((m, k) => t[k] > t[m] ? k : m, k1);
-        return { indicador: nombre(i), primer_anio: k1, valor_inicial: r(t[k1]), ultimo_anio: k2, valor_final: r(t[k2]), maximo: r(t[km]), anio_maximo: km };
+        const o = { indicador: nombre(i), primer_anio: k1, valor_inicial: r(t[k1]), ultimo_anio: k2, valor_final: r(t[k2]), maximo: r(t[km]), anio_maximo: km };
+        if (ks.length <= 12) o.valores = Object.fromEntries(ks.map(k => [k, r(t[k])]));
+        return o;
       });
       return { descripcion: `Preparó gráfica de ${tp === 'linea' ? 'líneas' : 'barras'} de ${l.length} indicador${l.length > 1 ? 'es' : ''}, ${d}–${h}`,
         grafica: { tipo: tp, ids: l, desde: d, hasta: h, titulo: titulo || (l.length === 1 ? nombre(l[0]) : `Evolución ${d}–${h}`) }, resumen, unidad: us[0] };
@@ -627,6 +629,8 @@ Cómo trabajar:
 11. Para «¿qué programa (o carrera, licenciatura) tiene más o menos…?» usa ordenar_filas, que revisa todas las filas. Si la pregunta dice «por espacio académico», «por sede», «por facultad» o «en cada…», responde con cada programa contado en su sede (sumar_sedes=false) y nombra la sede. Si no lo dice, responde con el programa sumado en todas sus sedes (sumar_sedes=true) e indica en cuántas sedes se imparte, y menciona también cuál es el mayor en una sola sede. Nunca sumes columnas de promedios o índices entre sedes. «Mejor» depende del indicador: en eficiencia terminal o titulación es el valor más alto; en reprobación o abandono, el más bajo (usa orden «menor»). En eficiencia terminal usa por omisión la de cohorte, que es la más comparable, y explica que la global puede pasar de 100%. Escribe porcentajes con máximo 2 decimales. Grafica con los ids que devuelve.
 12. Para relaciones entre personal y alumnos por espacio (por ejemplo alumnos por PTC): los PTC de cada espacio están en P03 como «Profesoras / es › Tiempo completo › Hombres» y «› Mujeres» (súmalos con calcular_serie); la matrícula del espacio es la suma de A26 (licenciatura), A40 (posgrado por espacio) y A15 (bachillerato) que le correspondan. Usa cruzar_espacios (operacion razon) y di que una cifra menor de alumnos por profesor es una mejor relación. Para proporciones entre dos grupos de personal (por ejemplo, % de PTC que están en el SNII, con perfil Prodep o con doctorado) usa cruzar_espacios con operacion proporcion: más alto es mejor. Nunca calcules razones o porcentajes a mano. Si una pregunta necesita datos de dos tablas cuyos nombres no coinciden exactamente (por ejemplo, la matrícula de los programas del SNP: lista A08 y matrícula A39), crúzalas con la herramienta que corresponda en lugar de decir que no se puede. Para «¿dónde se imparte / en cuántos espacios se ofrece el programa X?» usa donde_se_imparte (busca el programa en la matrícula por espacio, aunque el nombre esté escrito distinto). Si piden una tabla, lista o cuadro por espacio, usa tabla_espacios (se muestra completa al usuario; en tu texto comenta solo lo principal y recuerda que PTC son profesoras y profesores de tiempo completo). No incluyas institutos de investigación salvo que los pidan.
 
+No escribas texto entre una herramienta y otra (por ejemplo «Probemos con…» o «Ahora la gráfica…»): escribe solo la respuesta final, cuando ya tengas todos los datos. Si la pregunta pide varios años y una herramienta te da los valores año por año, menciónalos.
+
 Respuesta final: en español, de 2 a 5 frases, sin listas, títulos ni negritas. Escribe las cifras en formato mexicano (100,491 y 2.6%) con su unidad, tal como salieron de las herramientas. Formato: empieza directamente con el dato que se pidió, en la primera frase y sin introducciones (por ejemplo «En 2025 la Facultad de Ingeniería tuvo 2,914 alumnos de licenciatura.»). Si el dato no existe en la Agenda Estadística, dilo en la primera frase («No encontré ese dato en la Agenda Estadística.») y después menciona, si lo hay, el dato más parecido que sí está. Termina con una frase aparte que empiece con «Fuente:» y diga de qué tabla o indicador salió el dato y, si cruzaste o calculaste, cómo (por ejemplo «Fuente: tabla A26, Matrícula de estudios profesionales 2025.» o «Fuente: cruce de las tablas A26 y P03; alumnos entre profesores de tiempo completo.»).`;
 
 let sample = null, dl = null;
@@ -646,9 +650,11 @@ const MENSAJES_IA = {
 async function correrClaude(b, signal, avance = () => {}) {
   const candidatos = buscador.buscar(b.t, 10).resultados.map(r => r.id);
   const pasos = [], graficas = [], idsUsados = [], numsHerr = [], tablasIA = [];
+  let parcial = '', antes = '';  // el texto que Claude escribe entre herramientas no es parte de la respuesta
   const herramienta = (name, description, inputSchema) => ({
     name, description, inputSchema,
     execute(input) {
+      antes = parcial;
       if (name === 'graficar' && graficas.length >= 4) return { error: 'Ya hay 4 gráficas en esta respuesta; no se pueden agregar más.' };
       const res = Calc.ejecutar(name, input);
       Calc.idsEn(input).forEach(i => { if (!idsUsados.includes(i)) idsUsados.push(i); });
@@ -695,7 +701,16 @@ async function correrClaude(b, signal, avance = () => {}) {
   const prompt = `${INSTRUCCIONES}\n\nPregunta: ${b.t}${pista}\n\nIndicadores sugeridos (id: indicador):\n` +
     candidatos.map(i => `- ${i}: ${Calc.nombre(i)} (${byId[i].eje})`).join('\n');
   const t0 = performance.now();
-  const res = await sample(prompt, { tools, signal });
+  const r0 = await sample(prompt, { tools, signal, onText: ({ text }) => { parcial = text || ''; } });
+  const completo = String(r0.text || '');
+  let fin = completo;
+  if (antes.trim()) {  // se queda con lo que escribió después de la última herramienta
+    const cola = antes.trim().slice(-60), k = completo.lastIndexOf(cola);
+    if (completo.startsWith(antes)) fin = completo.slice(antes.length);
+    else if (k >= 0) fin = completo.slice(k + cola.length);
+    fin = fin.trim();
+  }
+  const res = { ...r0, text: fin || completo, texto_completo: completo };
   return { res, candidatos, pasos, graficas, idsUsados, numsHerr, tablasIA, segundos: (performance.now() - t0) / 1000 };
 }
 

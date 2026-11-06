@@ -485,6 +485,8 @@ class Calculos:
             resumen.append({"indicador": self.nombre(i), "primer_anio": k1, "valor_inicial": self.r(sel[k1]),
                             "ultimo_anio": k2, "valor_final": self.r(sel[k2]),
                             "maximo": self.r(max(sel.values())), "anio_maximo": max(sel, key=sel.get)})
+            if len(sel) <= 12:
+                resumen[-1]["valores"] = {k: self.r(v) for k, v in sel.items()}
         spec = {"tipo": tipo, "ids": ids, "desde": d, "hasta": h,
                 "titulo": titulo or (self.nombre(ids[0]) if len(ids) == 1 else f"Evolución {d}–{h}")}
         nombre_tipo = "líneas" if tipo == "linea" else "barras"
