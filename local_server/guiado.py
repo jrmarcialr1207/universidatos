@@ -278,6 +278,103 @@ def desglose_programas(plan, vistas, nombre, q):
     return False
 
 
+MATR_ESP_Q = re.compile(r"matricul|alumn|estudiant|inscrit")
+MATR_ESP_NO = re.compile(r"egresad|titulad|ingreso|becad|beca|discapac|abandono|reprob|indigena|eficiencia|mujer|hombre|sexo|"
+                         r"tutor|movilidad|servicio social|practicas|seguro|aspirant|por (grado|semestre|ano de avance)")
+NUM_TXT = {"dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7, "ocho": 8}
+
+
+def anios_matricula(q, disponibles):
+    """Años que pide la pregunta: un rango, «los últimos N años», «desde 2020», una evolución o solo el más reciente."""
+    disp = sorted(disponibles)
+    aq = sorted({int(x) for x in re.findall(r"\b(20[12]\d)\b", q)})
+    m = re.search(r"ultim[oa]s? (\d+|" + "|".join(NUM_TXT) + r") anos", q)
+    if m:
+        n = int(m.group(1)) if m.group(1).isdigit() else NUM_TXT[m.group(1)]
+        return disp[-n:]
+    if len(aq) >= 2:
+        return [a for a in disp if aq[0] <= a <= aq[-1]]
+    if aq and re.search(r"\b(desde|a partir de|de)\s+" + str(aq[0]), q) and not re.search(r"\ben\s+" + str(aq[0]), q):
+        return [a for a in disp if a >= aq[0]]
+    if aq:
+        return [a for a in disp if a == aq[0]] or disp[-1:]
+    if re.search(r"evoluci|historic|por ano|cada ano|anual|tendencia|crec|cambi|comportamiento|años", q):
+        return disp
+    return disp[-1:]
+
+
+def matricula_espacio(plan, esp, q):
+    """Matrícula de un espacio sin nivel en la pregunta: licenciatura (A26) + posgrado (A40, o A39 donde A40 no tiene el año)
+    + bachillerato (A15), por año."""
+    n, nombre, g = esp
+    ses = plan.ses
+    fuentes = [("A26", "Licenciatura"), ("A40", "Posgrado"), ("A39", "Posgrado"), ("A15", "Bachillerato")]
+    por_nivel = {}   # nivel -> {anio: (valor, tid, id de celda)}
+    grupo_txt = None
+    for tid, nivel in fuentes:
+        T = ses.tab.get(tid)
+        if not T or T.get("tipo") == "lista":
+            continue
+        filas = filas_de(T, n, g)
+        if not filas:  # «centro universitario uaem texcoco» en la pregunta; «Texcoco» dentro del grupo en las tablas de matrícula
+            corto = re.sub(r"^(facultad de|escuela de|centro universitario( uaem)?|unidad academica profesional|plantel)\s+", "", n)
+            filas = [i for i, x in enumerate(T["filas"]) if len(x["ruta"]) == 2 and norm(x["ruta"][1]) == corto
+                     and norm(x["ruta"][0]).split()[:1] == g.split()[:1]]
+        cols = [j for j, c in enumerate(T["columnas"]) if c == ["Total"]]
+        if not filas or not cols:
+            continue
+        f, c = filas[0], cols[0]
+        grupo_txt = grupo_txt or re.sub(r"\s*\*+$", "", T["filas"][f]["ruta"][0].strip())
+        for a in T["datos"]:
+            v = valor(T, a, f, c)
+            if v is not None and int(a) not in por_nivel.setdefault(nivel, {}):
+                por_nivel[nivel][int(a)] = (v, tid, f"{tid}.f{f}.c{c}")
+    por_nivel = {k: v for k, v in por_nivel.items() if v}
+    if not por_nivel:
+        return False
+    niveles = [k for k in ("Bachillerato", "Licenciatura", "Posgrado") if k in por_nivel]
+    disponibles = set().union(*(set(d) for d in por_nivel.values()))
+    anios = anios_matricula(q, disponibles)
+    # solo años con dato en todos los niveles que tiene el espacio (si no, el total no sería comparable)
+    anios = [a for a in anios if all(a in por_nivel[k] for k in niveles)] or anios
+    if not anios:
+        return False
+    nombre = re.sub(r"^(Centro Universitario UAEM|Unidad Académica Profesional|Facultad de|Plantel)\s+", "", nombre, flags=re.I) if grupo_txt else nombre
+    etiqueta = f"{nombre} ({grupo_txt})" if grupo_txt else nombre
+    total = {a: sum(por_nivel[k][a][0] for k in niveles if a in por_nivel[k]) for a in anios}
+    tablas_usadas = sorted({por_nivel[k][a][1] for k in niveles for a in anios if a in por_nivel[k]})
+    for k in niveles:
+        for a in anios:
+            if a in por_nivel[k]:
+                ses.asegurar_celda(por_nivel[k][a][2])
+                plan.usa(por_nivel[k][a][2])
+    desglose = lambda a: ", ".join(f"{k.lower()} {fmt(por_nivel[k][a][0])} (tabla {por_nivel[k][a][1]})" for k in niveles if a in por_nivel[k])
+    plan.paso(f"Sumó la matrícula de {etiqueta} por nivel ({', '.join(k.lower() for k in niveles)}) en las tablas {', '.join(tablas_usadas)}")
+    a1 = anios[-1]
+    if len(anios) == 1:
+        plan.hechos.append(f"Matrícula de {etiqueta} en {a1}: {fmt(total[a1])} alumnos en total ({desglose(a1)}).")
+    else:
+        a0 = anios[0]
+        d = total[a1] - total[a0]
+        pct = f", {'+' if d >= 0 else '−'}{fmt(round(abs(d) / total[a0] * 100, 1))}%" if total[a0] else ""
+        plan.hechos.append(f"Matrícula total de {etiqueta} ({' + '.join(k.lower() for k in niveles)}) por año: "
+                           + "; ".join(f"{a}: {fmt(total[a])}" for a in anios)
+                           + f". Cambio de {a0} a {a1}: {'+' if d >= 0 else '−'}{fmt(abs(d))} alumnos{pct}.")
+        plan.hechos.append(f"Desglose de {a1}: {desglose(a1)}. Desglose de {a0}: {desglose(a0)}.")
+        sid = "SM" + str(len([k for k in ses.ser if str(k).startswith("SM")]) + 1)
+        ses.ser[sid] = {a: float(total[a]) for a in anios}
+        ses.ind[sid] = {"id": sid, "ruta": f"Matrícula total de {etiqueta}", "concepto": f"Matrícula total de {etiqueta}",
+                        "eje": "Serie calculada", "archivo": "calc"}
+        if plan.grafica({"tipo": "barras", "ids": [sid], "desde": a0, "hasta": a1, "titulo": f"Matrícula total de {etiqueta}, {a0}–{a1}"}):
+            plan.hechos.append("Se muestra una gráfica de barras con la matrícula total de cada año y abajo la tabla por nivel.")
+        plan.tablas.append({"titulo": f"Matrícula de {etiqueta} por nivel, {a0}–{a1}", "encabezados": ["Año"] + niveles + ["Total"],
+                            "filas": [{"nombre": str(a), "textos": [fmt(por_nivel[k][a][0]) if a in por_nivel[k] else "—" for k in niveles] + [fmt(total[a])]} for a in anios],
+                            "fuente": "Fuente: Agenda Estadística, tablas " + ", ".join(tablas_usadas) + "."})
+    plan.hechos.append("Fuente: tablas " + ", ".join(f"{t} «{ses.tab[t]['titulo']}»" for t in tablas_usadas)
+                       + (f". La matrícula del espacio suma {' y '.join(k.lower() for k in niveles)}." if len(niveles) > 1 else "."))
+    return True
+
+
 def ficha_espacio(plan, esp, q):
     n, nombre, g = esp
     ses = plan.ses
@@ -1759,6 +1856,10 @@ def planear(ses, pregunta):
             if comparar_espacios(plan, grupos, espacios if len(espacios) >= 2 else [], q):
                 return plan
         elif len(espacios) == 1:
+            if MATR_ESP_Q.search(q) and not NIVELES_ESP.search(q) and not MATR_ESP_NO.search(q) and not POR_PROGRAMA.search(q) \
+                    and not PERSONAL.search(q) and matricula_espacio(plan, espacios[0], q):
+                return plan
+            plan = Plan(ses, pregunta)
             if ficha_espacio(plan, espacios[0], q):
                 return plan
     plan = Plan(ses, pregunta)
