@@ -1756,6 +1756,84 @@ def matricula_niveles(plan, q, a0, a1):
     plan.paso(f"Comparó la matrícula total y por nivel de {a0} y {a1}")
     return True
 
+# niveles educativos: una tabla o serie de otro nivel no responde la pregunta (eficiencia terminal de posgrado ≠ la de bachillerato)
+NIVELES_RX = {"bachillerato": r"bachillerato|preparatoria", "licenciatura": r"licenciatura|estudios profesionales|\bprofesional(es)?\b",
+              "posgrado": r"posgrado|estudios avanzados|maestria|doctorado|especialidad"}
+NIVEL_TXT = {"bachillerato": "bachillerato", "licenciatura": "licenciatura (estudios profesionales)", "posgrado": "posgrado (estudios avanzados)"}
+
+
+def niveles_de(texto):
+    t = norm(texto)
+    return {k for k, rx in NIVELES_RX.items() if re.search(rx, t)}
+
+
+class _BuscadorNivel:
+    """Envuelve el buscador de series para quitar las de otro nivel (y los indicadores padre que se dividen por nivel)."""
+    def __init__(self, base, ses, nq):
+        self.base, self.ses, self.nq = base, ses, nq
+
+    def compatible(self, sid):
+        r = norm(self.ses.nombre(sid))
+        nv = niveles_de(r)
+        if nv:
+            return bool(nv & self.nq)
+        rutas = [norm(i["ruta"]) for i in self.ses.ind.values() if isinstance(i, dict) and i.get("ruta")]
+        return not any(x.startswith(r + " > ") and niveles_de(x) for x in rutas)
+
+    def buscar(self, texto, maximo=8):
+        q, res = self.base.buscar(texto, maximo * 3)
+        return q, [x for x in res if self.compatible(x["id"])][:maximo]
+
+    def __getattr__(self, k):
+        return getattr(self.base, k)
+
+
+def limitar_nivel(ses, pregunta, q):
+    """Si la pregunta nombra un nivel, quita las tablas y series de otros niveles. Devuelve un Plan de «no encontrado» cuando
+    lo que mejor coincide existe solo para otros niveles (p. ej. eficiencia terminal de posgrado), o None."""
+    nq = niveles_de(q)
+    if not nq or not ses.tab:
+        return None
+    rank0, busc0 = ses._rank_tablas, ses.buscador
+    def nivel_ok(tid):
+        nv = niveles_de(ses.tab[tid]["titulo"])
+        return not nv or bool(nv & nq)
+    def con_sinon(texto):  # la Agenda dice «estudios avanzados» y «estudios profesionales»; «posgrado» solo aparece en el SNP (A08)
+        t = re.sub(r"\bposgrados?\b", "estudios avanzados", norm(texto))
+        return t + (" estudios profesionales" if "licenciatura" in nq and "estudios profesionales" not in t else "")
+    ses._rank_tablas = lambda texto: [x for x in rank0(con_sinon(texto)) if nivel_ok(x["id"])]
+    ses.buscador = _BuscadorNivel(busc0, ses, nq)
+    # para decidir si el dato existe en el nivel pedido se compara sin las palabras del nivel (si no, «posgrado» basta para coincidir)
+    tema = re.sub("|".join(NIVELES_RX.values()) + r"|\b(de|del|en|el|la|los|las)\b", " ", norm(pregunta))
+    if len(tema.split()) == 0:
+        return None
+    todos = rank0(tema)
+    if not todos:
+        return None
+    tope = todos[0]["pts"]
+    fuera = [x for x in todos if x["pts"] >= 0.8 * tope and not nivel_ok(x["id"])]
+    dentro = [x for x in todos if nivel_ok(x["id"]) and niveles_de(ses.tab[x["id"]]["titulo"])]  # del nivel pedido, no genéricas
+    _, s_todas = busc0.buscar(tema, 8)
+    _, s_ok = ses.buscador.buscar(pregunta, 8)
+    s_ok = [x for x in s_ok if niveles_de(ses.nombre(x["id"])) & nq]  # una serie del nivel pedido
+    s_tope = s_todas[0]["pts"] if s_todas else 0
+    hay_serie = bool(s_ok) and s_ok[0]["pts"] >= 0.8 * s_tope and s_ok[0]["pts"] >= 5
+    hay_tabla = bool(dentro) and dentro[0]["pts"] >= 0.6 * tope
+    if not fuera or hay_serie or hay_tabla:
+        return None
+    plan = Plan(ses, pregunta)
+    otros = sorted({n for x in fuera for n in niveles_de(ses.tab[x["id"]]["titulo"])} - nq)
+    pedido = " y ".join(NIVEL_TXT[n] for n in sorted(nq))
+    tablas_txt = "; ".join(f"tabla {x['id']} «{ses.tab[x['id']]['titulo']}»" for x in fuera[:3])
+    plan.paso(f"Buscó el dato para {pedido}: las tablas que coinciden son de otro nivel ({', '.join(x['id'] for x in fuera[:3])})")
+    plan.hechos.append(f"No encontré ese dato para {pedido} en la Agenda Estadística; la Agenda lo publica para "
+                       f"{' y '.join(NIVEL_TXT[n] for n in otros)} ({tablas_txt}).")
+    if dentro and dentro[0]["pts"] >= 0.3 * tope:
+        T = ses.tab[dentro[0]["id"]]
+        plan.hechos.append(f"Lo más cercano para {pedido} es la tabla {T['id']} «{T['titulo']}».")
+    return plan
+
+
 def planear(ses, pregunta):
     """Devuelve un Plan con hechos, pasos y gráficas, o None si la pregunta no encaja en el modo guiado."""
     pregunta = canon_ptc(pregunta)  # una sola forma de decir PTC
@@ -1774,6 +1852,9 @@ def planear(ses, pregunta):
                 return plan
     if ses.tab:
         ses.tab = vista_bloques(ses.tab)
+        plan_nivel = limitar_nivel(ses, pregunta, q)
+        if plan_nivel:
+            return plan_nivel
         if ANIO_PEDIDO:  # etiquetas de columna del año pedido (p. ej. «Personas egresadas global 2023-2024»)
             ses.tab = {k: ({**T, "columnas": [T["columnas_anio"][str(ANIO_PEDIDO)].get(str(j), c) for j, c in enumerate(T["columnas"])]}
                            if str(ANIO_PEDIDO) in T.get("columnas_anio", {}) else T) for k, T in ses.tab.items()}
