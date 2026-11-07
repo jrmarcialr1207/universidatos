@@ -489,6 +489,26 @@ def ficha_espacio(plan, esp, q):
                     plan.usa(*ids, r["id"])
                     plan.hechos.insert(0, f"Profesoras y profesores de tiempo completo (PTC) de {nombre} según la tabla {tid} «{T['titulos'][a]}»: "
                                           f"{fmt(r['valores'][a])} ({fmt(valor(T, a, f, ch))} hombres y {fmt(valor(T, a, f, cm))} mujeres).")
+                    if PORCENTAJE.search(q) or re.search(r"respecto|del total|de todo|parte del|representa", q):
+                        # el porcentaje de PTC se calcula con PTC (no con el personal académico total del espacio)
+                        ptc = lambda i: (valor(T, a, i, ch) or 0) + (valor(T, a, i, cm) or 0) if i is not None else None
+                        f_tot = next((i for i, x in enumerate(T["filas"]) if len(x["ruta"]) == 1 and norm(x["ruta"][0]) == "total"), None)
+                        f_gru = fila_grupo(T, g)
+                        v = r["valores"][a]
+                        partes = []
+                        if f_tot is not None and ptc(f_tot):
+                            partes.append(f"el {fmt(round(v / ptc(f_tot) * 100, 1))}% de los {fmt(ptc(f_tot))} PTC de la UAEMEX")
+                        if f_gru is not None and ptc(f_gru) and f_gru != f_tot:
+                            gtxt = T["filas"][f_gru]["ruta"][0].strip()
+                            partes.append(f"el {fmt(round(v / ptc(f_gru) * 100, 1))}% de los {fmt(ptc(f_gru))} PTC del grupo «{gtxt}»")
+                        if partes:
+                            # las otras líneas traen porcentajes de otras columnas (personal académico total): se quitan para no confundir
+                            plan.hechos[1:] = [re.sub(r" Representa el [^.]*\.(\d[^.]*\.)?", "", h) for h in plan.hechos[1:]]
+                            plan.hechos.insert(0, f"Los {fmt(v)} PTC de {nombre} representan " + " y ".join(partes)
+                                                  + f" en {a} (tabla {tid}, columnas «{base} › Hombres» y «› Mujeres»).")
+                            if "Profesoras / es › Total" in cols and valor(T, a, f, cols.index("Profesoras / es › Total")):
+                                pt = valor(T, a, f, cols.index("Profesoras / es › Total"))
+                                plan.hechos.insert(1, f"Dentro de {nombre}, {fmt(v)} de sus {fmt(pt)} profesoras y profesores ({fmt(round(v / pt * 100, 1))}%) son de tiempo completo.")
                 break
     if (POR_PROGRAMA.search(q) or (RANK_PROG.search(q) and EXTREMO.search(q))) and desglose_programas(plan, vistas, nombre, q):
         return True
