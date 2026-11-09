@@ -1516,8 +1516,11 @@ def ficha_de(ses, q):
 def ficha_resumen(plan, q, tid):
     """Ficha de un espacio: año de fundación y los totales de cada sección; la ficha completa se muestra abajo."""
     T = plan.ses.tab[tid]
-    a = sorted(T["renglones"])[-1]
+    a = str(ANIO_PEDIDO) if ANIO_PEDIDO and str(ANIO_PEDIDO) in T["renglones"] else sorted(T["renglones"])[-1]  # el año pedido, si la ficha lo tiene
     rs = T["renglones"][a]
+    if ANIO_PEDIDO and str(ANIO_PEDIDO) not in T["renglones"]:
+        anios_f = sorted(T["renglones"])
+        plan.hechos.append(f"No hay ficha de {T['titulo']} para {ANIO_PEDIDO}: la Agenda la publica " + (f"solo en {anios_f[0]}" if len(anios_f) == 1 else f"de {anios_f[0]} a {anios_f[-1]}") + f". Se muestra la de {a}.")
     if not rs:
         return False
     por_sec = {}
